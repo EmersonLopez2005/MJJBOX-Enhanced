@@ -1,0 +1,67 @@
+# MJJBOX 增强助手 - 快速安装指南
+
+## 🚀 一分钟快速安装
+
+### 第一步：安装油猴插件
+- **Chrome浏览器**: [点击安装 Tampermonkey](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
+- **Firefox浏览器**: [点击安装 Tampermonkey](https://addons.mozilla.org/en-US/firefox/addon/tampermonkey/)
+- **Edge浏览器**: [点击安装 Tampermonkey](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd)
+
+### 第二步：安装脚本
+1. 复制 `MJJBOX_Enhanced_Assistant.user.js` 文件的全部内容
+2. 点击浏览器右上角的 Tampermonkey 图标
+3. 选择"添加新脚本"
+4. 删除默认内容，粘贴复制的脚本代码
+5. 按 `Ctrl+S` 保存脚本
+
+### 第三步：使用脚本
+1. 访问 [https://mjjbox.com/](https://mjjbox.com/)
+2. 页面右上角会出现等级徽章和设置按钮
+3. 点击设置按钮 ⚙️ 开始自定义你的论坛外观
+
+## ✨ 主要功能
+
+| 功能 | 描述 |
+|------|------|
+| 🎯 **等级查看器** | 显示用户等级和详细进度 |
+| 🖼️ **自定义背景** | 设置个性化背景图片 |
+| ✏️ **字体自定义** | 调整字体样式和大小 |
+| 🎨 **主题设置** | 自定义颜色和圆角 |
+| 💾 **配置管理** | 设置自动保存到本地 |
+
+## 🎮 基本操作
+
+1. **查看等级**: 点击右上角的彩色徽章
+2. **打开设置**: 点击徽章下方的齿轮图标
+3. **设置背景**: 在"背景设置"标签页输入图片URL或上传本地图片
+4. **保存设置**: 点击"保存设置"按钮
+
+## 🔧 快速配置示例
+
+### 设置自定义背景
+```
+1. 勾选"启用自定义背景"
+2. 输入图片URL: https://example.com/your-image.jpg
+3. 选择显示模式: 覆盖
+4. 调整透明度: 0.8
+5. 点击"保存设置"
+```
+
+### 更改字体样式
+```
+1. 勾选"启用自定义字体"
+2. 选择字体族: 抖音美好体 (或微软雅黑)
+3. 设置字体大小: 16px
+4. 选择字体粗细: 正常
+5. 点击"保存设置"
+```
+
+## ❓ 遇到问题？
+
+- **脚本没生效**: 刷新页面，检查 Tampermonkey 是否启用
+- **背景不显示**: 检查图片URL是否正确，尝试使用本地上传
+- **设置没保存**: 确认点击了"保存设置"按钮
+
+
+
+**开始享受你的个性化 MJJBOX 论坛体验吧！** 🎉
