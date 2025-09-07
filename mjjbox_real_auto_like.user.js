@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         MJJBOX精确自动点赞脚本
 // @namespace    http://tampermonkey.net/
-// @version      5.0
-// @description  根据精确HTML结构优化的MJJBOX自动点赞脚本
+// @version      5.1
+// @description  根据精确HTML结构优化的MJJBOX自动点赞脚本 - 修复返回逻辑和点赞数量
 // @author       MJJBOX
 // @match        https://mjjbox.com/*
 // @match        https://www.mjjbox.com/*
@@ -19,13 +19,16 @@
     // 配置选项
     const CONFIG = {
         enabled: GM_getValue('autoLikeEnabled', false),
+        autoRun: GM_getValue('autoRun', false), // 新增：自动运行开关
         minDelay: GM_getValue('minDelay', 3000),
         maxDelay: GM_getValue('maxDelay', 8000),
         maxLikesPerSession: GM_getValue('maxLikesPerSession', 15),
         likeProb: GM_getValue('likeProb', 0.9),
         likeComments: GM_getValue('likeComments', true),
-        maxCommentsPerPost: GM_getValue('maxCommentsPerPost', 5),
-        returnDelay: GM_getValue('returnDelay', 2000)
+        maxCommentsPerPost: GM_getValue('maxCommentsPerPost', 10), // 增加到10个
+        returnDelay: GM_getValue('returnDelay', 2000),
+        likeAllComments: GM_getValue('likeAllComments', true), // 新增：是否点赞所有评论
+        randomLikeMode: GM_getValue('randomLikeMode', false) // 新增：随机点赞模式
     };
 
     // 统计数据
@@ -53,18 +56,19 @@
     let isRunning = false;
     let currentPostQueue = [];
     let originalUrl = '';
+    let returnToSidebar = false; // 新增：标记是否需要返回侧栏
 
     // 创建控制面板
     function createControlPanel() {
         const panel = document.createElement('div');
         panel.id = 'mjjbox-optimized-like-panel';
         panel.innerHTML = `
-            <div style="position: fixed; top: 10px; right: 10px; z-index: 9999; 
-                        background: #fff; border: 2px solid #28a745; border-radius: 8px; 
-                        padding: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
-                        font-family: Arial, sans-serif; min-width: 300px;">
+            <div style="position: fixed; top: 10px; right: 10px; z-index: 9999;
+                        background: #fff; border: 2px solid #28a745; border-radius: 8px;
+                        padding: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                        font-family: Arial, sans-serif; min-width: 320px;">
                 <h3 style="margin: 0 0 10px 0; color: #28a745; font-size: 16px;">
-                    🎯 MJJBOX精确点赞 v5.0
+                    🎯 MJJBOX精确点赞 v5.1
                 </h3>
                 <div style="margin-bottom: 8px; font-size: 12px; background: #f8f9fa; padding: 8px; border-radius: 4px;">
                     <div><strong>统计信息:</strong></div>
@@ -75,34 +79,48 @@
                 </div>
                 <div style="margin-bottom: 10px;">
                     <label style="font-size: 12px;">延时范围(秒):</label>
-                    <input type="number" id="minDelay" value="${CONFIG.minDelay/1000}" 
+                    <input type="number" id="minDelay" value="${CONFIG.minDelay/1000}"
                            style="width: 40px; margin: 0 2px;" min="2" max="30">
                     -
-                    <input type="number" id="maxDelay" value="${CONFIG.maxDelay/1000}" 
+                    <input type="number" id="maxDelay" value="${CONFIG.maxDelay/1000}"
                            style="width: 40px; margin: 0 2px;" min="3" max="60">
                 </div>
                 <div style="margin-bottom: 10px;">
                     <label style="font-size: 12px;">单次最大:</label>
-                    <input type="number" id="maxLikes" value="${CONFIG.maxLikesPerSession}" 
+                    <input type="number" id="maxLikes" value="${CONFIG.maxLikesPerSession}"
                            style="width: 50px;" min="1" max="50">
                     <span style="font-size: 11px;">个帖子</span>
                 </div>
                 <div style="margin-bottom: 10px;">
-                    <button id="startLiking" style="background: #28a745; color: white; 
+                    <label style="font-size: 12px;">
+                        <input type="checkbox" id="autoRun" ${CONFIG.autoRun ? 'checked' : ''}>
+                        页面加载时自动运行
+                    </label><br>
+                    <label style="font-size: 12px;">
+                        <input type="checkbox" id="likeAllComments" ${CONFIG.likeAllComments ? 'checked' : ''}>
+                        点赞所有评论
+                    </label><br>
+                    <label style="font-size: 12px;">
+                        <input type="checkbox" id="randomLikeMode" ${CONFIG.randomLikeMode ? 'checked' : ''}>
+                        随机点赞模式
+                    </label>
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <button id="startLiking" style="background: #28a745; color: white;
                             border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; margin-right: 5px;">
                         开始精确点赞
                     </button>
-                    <button id="stopLiking" style="background: #dc3545; color: white; 
+                    <button id="stopLiking" style="background: #dc3545; color: white;
                             border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer;">
                         停止
                     </button>
                 </div>
                 <div style="margin-bottom: 10px;">
-                    <button id="testDiscourse" style="background: #17a2b8; color: white; 
+                    <button id="testDiscourse" style="background: #17a2b8; color: white;
                             border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; margin-right: 5px;">
                         测试Discourse按钮
                     </button>
-                    <button id="findPosts" style="background: #ffc107; color: black; 
+                    <button id="findPosts" style="background: #ffc107; color: black;
                             border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 11px;">
                         查找帖子
                     </button>
@@ -111,7 +129,7 @@
                     状态: <span id="status">待机中</span><br>
                     <span id="progress"></span>
                 </div>
-                <button id="togglePanel" style="position: absolute; top: 5px; right: 5px; 
+                <button id="togglePanel" style="position: absolute; top: 5px; right: 5px;
                         background: none; border: none; font-size: 16px; cursor: pointer;">
                     ➖
                 </button>
@@ -138,6 +156,22 @@
             GM_setValue('maxLikesPerSession', CONFIG.maxLikesPerSession);
         });
 
+        document.getElementById('autoRun').addEventListener('change', function() {
+            CONFIG.autoRun = this.checked;
+            GM_setValue('autoRun', CONFIG.autoRun);
+            console.log(`🔧 自动运行已${this.checked ? '启用' : '禁用'}`);
+        });
+
+        document.getElementById('likeAllComments').addEventListener('change', function() {
+            CONFIG.likeAllComments = this.checked;
+            GM_setValue('likeAllComments', CONFIG.likeAllComments);
+        });
+
+        document.getElementById('randomLikeMode').addEventListener('change', function() {
+            CONFIG.randomLikeMode = this.checked;
+            GM_setValue('randomLikeMode', CONFIG.randomLikeMode);
+        });
+
         document.getElementById('startLiking').addEventListener('click', startOptimizedAutoLike);
         document.getElementById('stopLiking').addEventListener('click', stopAutoLike);
         document.getElementById('testDiscourse').addEventListener('click', testDiscourseButtons);
@@ -147,7 +181,7 @@
             const content = this.parentElement;
             const children = Array.from(content.children).filter(child => child !== this);
             const isHidden = children[0].style.display === 'none';
-            
+
             children.forEach(child => {
                 child.style.display = isHidden ? 'block' : 'none';
             });
@@ -178,29 +212,60 @@
             sessionCount: stats.sessionLikes,
             postsCount: stats.postsProcessed
         };
-        
+
         Object.entries(elements).forEach(([id, value]) => {
             const el = document.getElementById(id);
             if (el) el.textContent = value;
         });
     }
 
+    // 检测当前页面类型
+    function detectPageType() {
+        const url = window.location.href;
+        const pathname = window.location.pathname;
+
+        // 检测是否在侧栏话题页面
+        if (pathname.includes('/c/') || url.includes('category') ||
+            document.querySelector('.category-list') ||
+            document.querySelector('.topic-list')) {
+            return 'category';
+        }
+
+        // 检测是否在帖子页面
+        if (pathname.includes('/t/')) {
+            return 'topic';
+        }
+
+        // 检测是否在首页
+        if (pathname === '/' || pathname === '') {
+            return 'home';
+        }
+
+        return 'other';
+    }
+
+    // 简化返回逻辑 - 统一返回首页
+    function getReturnUrl() {
+        // 直接返回首页，最稳定可靠
+        return 'https://mjjbox.com/';
+    }
+
     // 查找帖子链接
     function findPostLinks() {
         const posts = [];
         console.log('🔍 开始查找帖子链接...');
-        
+
         const allLinks = document.querySelectorAll('a');
-        
+
         allLinks.forEach((link, index) => {
             const href = link.href || '';
             const text = link.textContent.trim();
-            
+
             // MJJBOX使用的URL格式: /t/xxx/xxx
             if (href && href.includes('mjjbox.com/t/') && text && text.length > 5) {
                 const match = href.match(/\/t\/[^\/]+\/(\d+)/);
                 const postId = match ? match[1] : href.split('/').pop();
-                
+
                 if (postId && !processedPosts.has(postId)) {
                     posts.push({
                         id: postId,
@@ -212,7 +277,7 @@
                 }
             }
         });
-        
+
         console.log(`📋 总共找到 ${posts.length} 个新帖子`);
         return posts;
     }
@@ -221,20 +286,19 @@
     function findAndShowPosts() {
         updateStatus('查找帖子中...');
         const posts = findPostLinks();
-        
+
         if (posts.length > 0) {
             updateStatus(`找到 ${posts.length} 个帖子`);
-            
+
             posts.forEach((post, i) => {
                 post.element.style.border = '2px solid #28a745';
                 post.element.style.backgroundColor = '#d4edda';
-                
+
                 setTimeout(() => {
                     post.element.style.border = '';
                     post.element.style.backgroundColor = '';
                 }, 5000);
             });
-            
 
         } else {
             updateStatus('未找到新帖子');
@@ -244,9 +308,9 @@
     // 精确查找Discourse反应按钮
     function findDiscourseReactionButtons() {
         const buttons = [];
-        
+
         console.log('🎯 精确查找Discourse反应按钮...');
-        
+
         // 根据你提供的HTML结构，精确查找
         const preciseSelectors = [
             // 最精确的选择器 - 根据截图HTML结构
@@ -263,7 +327,7 @@
             try {
                 const elements = document.querySelectorAll(selector);
                 console.log(`🔍 选择器 "${selector}": ${elements.length} 个元素`);
-                
+
                 elements.forEach(el => {
                     if (el.offsetParent !== null && !el.disabled && !buttons.includes(el)) {
                         buttons.push(el);
@@ -281,7 +345,7 @@
         // 如果还是没找到，尝试更通用的方法
         if (buttons.length === 0) {
             console.log('🔍 使用通用方法查找反应按钮...');
-            
+
             // 查找所有包含"actions"的div
             const actionDivs = document.querySelectorAll('div[class*="actions"], .actions');
             actionDivs.forEach(div => {
@@ -303,21 +367,21 @@
     function testDiscourseButtons() {
         updateStatus('测试Discourse按钮识别...');
         const buttons = findDiscourseReactionButtons();
-        
+
         if (buttons.length > 0) {
             updateStatus(`找到 ${buttons.length} 个Discourse按钮`);
-            
+
             // 高亮显示找到的按钮
             buttons.forEach((btn, i) => {
                 btn.style.border = '3px solid #28a745';
                 btn.style.boxShadow = '0 0 10px #28a745';
-                
+
                 setTimeout(() => {
                     btn.style.border = '';
                     btn.style.boxShadow = '';
                 }, 5000);
             });
-            
+
         } else {
             updateStatus('未找到Discourse按钮');
         }
@@ -329,40 +393,44 @@
             const text = button.textContent.trim() || button.title || button.getAttribute('aria-label') || '';
             const className = button.className || '';
             console.log(`❤️ 准备点赞${type}: "${text}" (${className})`);
-            
+
             // 滚动到按钮位置
             button.scrollIntoView({ behavior: 'smooth', block: 'center' });
             await sleep(1000);
-            
+
             // 记录点击前的状态
             const beforeClasses = button.className;
             const beforeText = button.textContent;
-            
+
             // 点击按钮
             button.click();
             console.log(`🖱️ 已点击按钮`);
-            
+
             // 等待响应
             await sleep(3000);
-            
+
             // 检查点击后的状态变化
             const afterClasses = button.className;
             const afterText = button.textContent;
-            
+
             const hasStateChange = beforeClasses !== afterClasses || beforeText !== afterText;
-            
+
             if (hasStateChange) {
                 // 更新统计
                 stats.totalLikes++;
                 stats.todayLikes++;
                 stats.sessionLikes++;
-                
+
+                if (type === '评论') {
+                    stats.commentsLiked++;
+                }
+
                 // 保存数据
                 GM_setValue('totalLikes', stats.totalLikes);
                 GM_setValue('todayLikes', stats.todayLikes);
-                
+
                 updateStats();
-                
+
                 console.log(`✅ ${type}点赞成功！状态已改变`);
                 console.log(`   - 前: ${beforeClasses} | ${beforeText}`);
                 console.log(`   - 后: ${afterClasses} | ${afterText}`);
@@ -382,90 +450,109 @@
         try {
             updateStatus(`打开帖子: ${post.title.substring(0, 20)}...`);
             console.log(`📖 处理帖子: ${post.title}`);
-            
+
             // 保存当前URL
-            const returnUrl = window.location.href;
-            
+            const returnUrl = getReturnUrl();
+
             // 跳转到帖子页面
             window.location.href = post.url;
-            
+
             // 等待页面加载
             await sleep(CONFIG.returnDelay + 3000);
-            
+
             // 检查是否成功跳转到帖子页面
             if (!window.location.href.includes('/t/')) {
                 console.log('❌ 未能成功跳转到帖子页面');
                 return false;
             }
-            
+
             updateStatus('查找Discourse反应按钮...');
-            
+
             // 等待页面完全加载并查找按钮
             let attempts = 0;
             let buttons = [];
-            
+
             while (attempts < 15 && buttons.length === 0) {
                 buttons = findDiscourseReactionButtons();
-                
+
                 if (buttons.length === 0) {
                     console.log(`⏳ 第 ${attempts + 1} 次尝试，等待页面加载...`);
                     await sleep(1000);
                     attempts++;
                 }
             }
-            
+
             if (buttons.length > 0) {
                 updateStatus(`找到 ${buttons.length} 个反应按钮`);
-                
-                // 按顺序点赞按钮 - 通常点赞前几个按钮
+
                 let successCount = 0;
-                const maxButtons = Math.min(buttons.length, 3); // 最多点赞3个按钮
-                
-                for (let i = 0; i < maxButtons; i++) {
+                let buttonsToLike = [];
+
+                // 根据配置决定点赞策略
+                if (CONFIG.likeAllComments) {
+                    // 点赞所有按钮
+                    buttonsToLike = buttons;
+                    console.log(`📝 点赞所有 ${buttons.length} 个按钮`);
+                } else if (CONFIG.randomLikeMode) {
+                    // 随机选择按钮点赞
+                    const randomCount = Math.min(buttons.length, Math.floor(Math.random() * buttons.length) + 1);
+                    const shuffled = [...buttons].sort(() => 0.5 - Math.random());
+                    buttonsToLike = shuffled.slice(0, randomCount);
+                    console.log(`🎲 随机选择 ${buttonsToLike.length} 个按钮点赞`);
+                } else {
+                    // 默认：点赞前几个按钮
+                    const maxButtons = Math.min(buttons.length, CONFIG.maxCommentsPerPost);
+                    buttonsToLike = buttons.slice(0, maxButtons);
+                    console.log(`📊 按顺序点赞前 ${buttonsToLike.length} 个按钮`);
+                }
+
+                // 执行点赞
+                for (let i = 0; i < buttonsToLike.length; i++) {
                     // 检查停止状态
                     if (!isRunning) {
                         console.log('🛑 检测到停止信号，停止点赞');
                         break;
                     }
-                    
+
                     if (Math.random() < CONFIG.likeProb) {
-                        const success = await performLike(buttons[i], i === 0 ? '帖子' : '评论');
+                        const success = await performLike(buttonsToLike[i], i === 0 ? '帖子' : '评论');
                         if (success) successCount++;
-                        
+
                         // 按钮间延时
-                        if (i < maxButtons - 1) {
+                        if (i < buttonsToLike.length - 1) {
                             await sleep(1000 + Math.random() * 2000);
                         }
                     }
                 }
-                
+
                 // 标记帖子为已处理
                 processedPosts.add(post.id);
                 stats.postsProcessed++;
-                
+
                 // 保存已处理的帖子
                 GM_setValue('processedPosts', Array.from(processedPosts).join(','));
-                
+
                 updateStats();
-                
+
                 console.log(`✅ 帖子处理完成，成功点赞 ${successCount} 个按钮`);
-                
-                // 返回原页面
-                updateStatus('返回列表页...');
+
+                // 返回首页
+                updateStatus('返回首页...');
+                console.log(`🏠 返回首页: ${returnUrl}`);
                 window.location.href = returnUrl;
                 await sleep(CONFIG.returnDelay);
-                
+
                 return true;
             } else {
                 console.log('❌ 未找到Discourse反应按钮');
-                
+
                 // 返回原页面
                 window.location.href = returnUrl;
                 await sleep(CONFIG.returnDelay);
-                
+
                 return false;
             }
-            
+
         } catch (error) {
             console.error('❌ 处理帖子失败:', error);
             return false;
@@ -487,61 +574,71 @@
     // 开始优化的自动点赞
     async function startOptimizedAutoLike() {
         if (isRunning) return;
-        
+
         isRunning = true;
         stats.sessionLikes = 0;
         stats.postsProcessed = 0;
+        stats.commentsLiked = 0;
         updateStats();
-        
+
         try {
             updateStatus('初始化精确点赞...');
             originalUrl = window.location.href;
-            
+            console.log(`📍 原始页面: ${originalUrl}`);
+            console.log(`🏠 操作完成后将返回首页: https://mjjbox.com/`);
+
             // 获取帖子列表
             currentPostQueue = findPostLinks();
-            
+
             if (currentPostQueue.length === 0) {
                 updateStatus('未找到可处理的帖子');
-                console.log('⚠️ 当前页面未找到新的帖子，请刷新页面或换个页面试试');
+                console.log('⚠️ 当前页面未找到新的帖子');
+                console.log('💡 建议：');
+                console.log('   1. 刷新页面重试');
+                console.log('   2. 点击左侧栏的话题分类');
+                console.log('   3. 访问首页查看最新帖子');
                 isRunning = false;
                 return;
             }
-            
+
             const maxPosts = Math.min(currentPostQueue.length, CONFIG.maxLikesPerSession);
             console.log(`📊 准备处理 ${maxPosts} 个帖子`);
-            
+            console.log(`⚙️ 点赞模式: ${CONFIG.likeAllComments ? '全部评论' : CONFIG.randomLikeMode ? '随机模式' : '顺序模式'}`);
 
-            
             // 按顺序处理帖子
             for (let i = 0; i < maxPosts && isRunning; i++) {
                 const post = currentPostQueue[i];
                 updateProgress(i + 1, maxPosts);
-                
+
                 console.log(`📖 处理第 ${i + 1}/${maxPosts} 个帖子: ${post.title}`);
-                
+
                 const success = await processPost(post);
-                
+
                 if (success) {
                     console.log(`✅ 第 ${i + 1} 个帖子处理成功`);
                 } else {
                     console.log(`❌ 第 ${i + 1} 个帖子处理失败`);
                 }
-                
+
                 // 检查停止状态
                 if (!isRunning) {
                     console.log('🛑 检测到停止信号，立即退出');
                     break;
                 }
-                
+
                 // 处理间隔
                 if (i < maxPosts - 1) {
                     await randomDelay();
                 }
             }
-            
+
             updateStatus(`完成 - 处理了 ${stats.postsProcessed} 个帖子，点赞 ${stats.sessionLikes} 次`);
-            console.log(`🎉 精确点赞完成！处理了 ${stats.postsProcessed} 个帖子，总共点赞 ${stats.sessionLikes} 次`);
-            
+            console.log(`🎉 精确点赞完成！`);
+            console.log(`📊 统计结果:`);
+            console.log(`   - 处理帖子: ${stats.postsProcessed} 个`);
+            console.log(`   - 总点赞数: ${stats.sessionLikes} 次`);
+            console.log(`   - 评论点赞: ${stats.commentsLiked} 次`);
+
         } catch (error) {
             console.error('❌ 精确自动点赞出错:', error);
             updateStatus('出现错误');
@@ -555,11 +652,13 @@
         isRunning = false;
         updateStatus('正在停止...');
         console.log('🛑 用户停止了自动点赞');
-        
-        // 立即返回原始页面
-        if (originalUrl && window.location.href !== originalUrl) {
-            updateStatus('返回原页面...');
-            window.location.href = originalUrl;
+
+        // 立即返回首页
+        const returnUrl = getReturnUrl();
+        if (window.location.href !== returnUrl) {
+            updateStatus('返回首页...');
+            console.log(`🏠 返回首页: ${returnUrl}`);
+            window.location.href = returnUrl;
         } else {
             updateStatus('已停止');
         }
@@ -583,17 +682,21 @@
             return;
         }
 
-        console.log('🚀 MJJBOX精确自动点赞脚本 v5.0 已加载');
+        console.log('🚀 MJJBOX精确自动点赞脚本 v5.1 已加载');
         console.log('📄 当前页面:', window.location.href);
-        
+        console.log('🔧 新功能: 修复返回逻辑 + 全部评论点赞 + 随机模式 + 自动运行开关');
+
         // 创建控制面板
         createControlPanel();
-        
-        // 如果启用了自动点赞，延时启动
-        if (CONFIG.enabled) {
+
+        // 只有在自动运行开关开启时才自动启动
+        if (CONFIG.autoRun) {
+            console.log('🤖 自动运行已启用，5秒后开始执行...');
             setTimeout(() => {
                 startOptimizedAutoLike();
             }, 5000);
+        } else {
+            console.log('⏸️ 自动运行已禁用，请手动点击"开始精确点赞"按钮');
         }
     }
 
