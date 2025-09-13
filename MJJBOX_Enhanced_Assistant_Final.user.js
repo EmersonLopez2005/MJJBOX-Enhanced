@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         MJJBOX 增强助手
 // @namespace    http://tampermonkey.net/
-// @version      2.7
-// @description  整合等级查看器与自定义背景、字体等美化功能，完全修复版本
+// @version      2.8
+// @description  整合等级查看器与自定义背景、字体等美化功能，新增点赞质量隐藏门槛检测
 // @author       MJJBOX
 // @match        https://mjjbox.com/*
 // @grant        GM_xmlhttpRequest
@@ -434,19 +434,20 @@
 
     .mjjbox-modal {
       position: fixed; inset: 0;
-      background: rgba(0,0,0,.42); z-index: 10000;
+      background: rgba(0,0,0,.6); z-index: 10000;
       opacity: 0; visibility: hidden;
       transition: opacity .35s,visibility .35s;
-      backdrop-filter: blur(6px);
     }
     .mjjbox-modal.show { opacity: 1; visibility: visible; }
 
     .mjjbox-modal-content {
       position: absolute;
-      background: #fff; border-radius: 16px;
+      background: #ffffff;
+      border: 1px solid #e1e5e9;
+      border-radius: 16px;
       max-width: 90vw; max-height: 85vh;
       padding: 28px 30px 36px;
-      box-shadow: 0 20px 60px rgba(0,0,0,.35);
+      box-shadow: 0 20px 60px rgba(0,0,0,.15);
       overflow-y: auto;
       transform: scale(.92) translateY(-30px);
       transition: transform .35s;
@@ -713,6 +714,262 @@
     }
   };
 
+  /* ========== 点赞质量条款检查（隐藏门槛） ========== */
+  const LIKE_QUALITY = {
+    // 官方隐藏阈值
+    minReceivers: 6,        // 收到赞必须来自 ≥6 个不同用户
+    minGivingDays: 8,       // 送出赞必须分布在 ≥8 个不同天
+    minGivingGapHours: 24,  // 同一自然天内的点赞全部视为 1 天
+  };
+
+  /**
+   * 获取过去 100 天的点赞原始记录（公开接口，无需权限）
+   * 返回 Promise<{
+   *    received: Array<{username, created_at}>,
+   *    given:    Array<{created_at}>
+   * }>
+   */
+  async function fetchLikeRawRecords(username) {
+    console.log('🔍 开始获取点赞记录，用户名:', username);
+
+    const fetchPage = async (url) => {
+      console.log('📡 请求URL:', url);
+      return new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+          method: 'GET',
+          url: url,
+          timeout: 15000,
+          headers: {
+            Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          },
+          onload: (resp) => {
+            console.log('📡 响应状态:', resp.status, resp.statusText);
+            if (resp.status === 200) {
+              try {
+                const data = JSON.parse(resp.responseText);
+                console.log('📊 响应数据结构:', Object.keys(data));
+                console.log('📊 响应数据示例:', resp.responseText.substring(0, 500));
+                resolve(data);
+              } catch (e) {
+                console.error('❌ JSON解析失败:', e, resp.responseText?.substring(0, 500));
+                reject(new Error('JSON解析失败'));
+              }
+            } else {
+              console.error(`❌ HTTP错误 ${resp.status}:`, resp.responseText?.substring(0, 200));
+              reject(new Error(`HTTP ${resp.status}: ${resp.statusText}`));
+            }
+          },
+          onerror: (error) => {
+            console.error('❌ 网络请求失败:', error);
+            reject(new Error('网络错误'));
+          }
+        });
+      });
+    };
+
+    // 1. 收到的赞 - 使用正确的API路径
+    const received = [];
+    const receivedUrls = [
+      `/user_actions.json?username=${username}&filter=2&offset=0`, // filter=2 是 likes_received
+      `/user_actions.json?username=${username}&offset=0`, // 获取所有，然后过滤
+    ];
+
+    for (const baseUrl of receivedUrls) {
+      try {
+        console.log('🔍 尝试获取收到赞:', baseUrl);
+        const json = await fetchPage(baseUrl);
+
+        // 尝试多种可能的数据结构
+        let actions = json?.user_actions || json?.actions || json?.data || json?.user?.user_actions || [];
+
+        if (actions.length > 0) {
+          console.log('📝 收到赞示例数据:', actions[0]);
+          console.log('📝 数据字段:', Object.keys(actions[0]));
+
+          // 检查所有action_type
+          const actionTypes = [...new Set(actions.map(it => it.action_type))];
+          console.log('📊 所有action_type:', actionTypes);
+
+          // 显示前几条记录的详细信息
+          actions.slice(0, 3).forEach((item, index) => {
+            console.log(`📋 记录${index + 1}: action_type=${item.action_type}, acting_username=${item.acting_username}, target_username=${item.target_username}, username=${item.username}`);
+          });
+
+          // 对于收到赞 (action_type=2)，acting_username 是点赞者
+          const allLikes = actions.filter(it => it.action_type === 2);
+          console.log(`📊 总共找到 ${allLikes.length} 条收到赞记录 (action_type=2)`);
+
+          const pageData = allLikes.map(it => {
+            const likerUsername = it.acting_username; // 点赞者用户名
+            const targetUsername = it.target_username; // 被点赞者用户名
+            console.log(`🔍 收到赞记录: 点赞者=${likerUsername}, 目标用户=${targetUsername}, 当前用户=${username}, 是否自己=${likerUsername === username}`);
+
+            return {
+              username: likerUsername,
+              created_at: it.created_at || it.date,
+              raw: it
+            };
+          }).filter(item => {
+            // 确保点赞者不是自己
+            const isValid = item.username && item.username !== username;
+            console.log(`🔍 过滤结果: 点赞者=${item.username}, 是否有效=${isValid}`);
+            return isValid;
+          });
+
+          received.push(...pageData);
+          console.log(`✅ 成功获取 ${pageData.length} 条收到赞记录`);
+          break; // 成功获取就跳出循环
+        } else {
+          console.log('⚠️ 该API返回空数据');
+        }
+      } catch (e) {
+        console.warn(`❌ 获取收到赞失败 ${baseUrl}:`, e.message);
+        continue; // 尝试下一个URL
+      }
+    }
+
+    // 2. 送出的赞 - 使用正确的API路径
+    const given = [];
+    const givenUrls = [
+      `/user_actions.json?username=${username}&filter=1&offset=0`, // filter=1 是 likes_given
+      `/user_actions.json?username=${username}&offset=0`, // 获取所有，然后过滤
+    ];
+
+    for (const baseUrl of givenUrls) {
+      try {
+        console.log('🔍 尝试获取送出赞:', baseUrl);
+        const json = await fetchPage(baseUrl);
+
+        let actions = json?.user_actions || json?.actions || json?.data || json?.user?.user_actions || [];
+
+        if (actions.length > 0) {
+          console.log('📝 送出赞示例数据:', actions[0]);
+          console.log('📝 数据字段:', Object.keys(actions[0]));
+
+          // 过滤送出赞 (action_type=1)
+          const allGiven = actions.filter(it => it.action_type === 1);
+          console.log(`📊 总共找到 ${allGiven.length} 条送出赞记录 (action_type=1)`);
+
+          const pageData = allGiven.map(it => ({
+            created_at: it.created_at || it.date,
+            raw: it
+          }));
+
+          given.push(...pageData);
+          console.log(`✅ 成功获取 ${pageData.length} 条送出赞记录`);
+          break;
+        } else {
+          console.log('⚠️ 该API返回空数据');
+        }
+      } catch (e) {
+        console.warn(`❌ 获取送出赞失败 ${baseUrl}:`, e.message);
+        continue;
+      }
+    }
+
+    console.log(`📊 最终结果: 收到赞 ${received.length} 条, 送出赞 ${given.length} 条`);
+
+    // 如果API都失败，记录详细错误信息
+    if (received.length === 0 && given.length === 0) {
+      console.error('❌ 所有API路径都失败，可能的原因:');
+      console.error('1. 需要登录状态才能访问API');
+      console.error('2. mjjbox.com 的API路径与标准Discourse不同');
+      console.error('3. 存在CORS跨域限制');
+      console.error('4. API需要特殊的认证头或参数');
+      console.error('请检查浏览器控制台的网络请求，看看实际的API响应');
+    }
+
+    return { received, given };
+  }
+
+  /**
+   * 计算点赞质量结果
+   * 返回 {receivedOk, givingOk, receiverSet, givingDays}
+   */
+  function calcLikeQuality({ received, given }, currentUsername = null) {
+    console.log('🧮 开始计算点赞质量...');
+    console.log('📊 原始数据 - 收到赞:', received?.length, '条, 送出赞:', given?.length, '条');
+    console.log('👤 当前用户名:', currentUsername);
+
+    // 过滤收到赞的用户名（排除自己和无效用户名）
+    const allReceivedUsernames = received.map(it => it.username);
+    console.log('👥 所有收到赞用户名:', allReceivedUsernames.slice(0, 10));
+
+    const validUsernames = received
+      .map(it => it.username)
+      .filter(username => {
+        const isValid = username &&
+                        username.trim() !== '' &&
+                        username !== currentUsername;
+        if (!isValid && username) {
+          console.log('❌ 过滤掉用户名:', username, '原因:', username === currentUsername ? '是自己' : '无效');
+        }
+        return isValid;
+      });
+
+    console.log('✅ 有效收到赞用户名:', validUsernames);
+    const receiverSet = new Set(validUsernames);
+    console.log('👥 去重后的点赞来源用户:', Array.from(receiverSet));
+
+    // 详细分析送出赞的日期
+    console.log('🔍 详细分析送出赞数据...');
+    console.log('📊 送出赞原始数据总数:', given.length);
+
+    // 显示前10条送出赞的详细信息
+    given.slice(0, 10).forEach((item, index) => {
+      console.log(`📋 送出赞${index + 1}:`, {
+        created_at: item.created_at,
+        raw: item.raw ? Object.keys(item.raw) : 'no raw data'
+      });
+    });
+
+    const allGivenDates = given.map(it => it.created_at);
+    console.log('📅 所有送出赞日期 (前20条):', allGivenDates.slice(0, 20));
+
+    const validDates = given
+      .map((it, index) => {
+        try {
+          if (!it.created_at) {
+            console.log(`❌ 第${index + 1}条记录缺少created_at:`, it);
+            return null;
+          }
+          const date = new Date(it.created_at).toISOString().slice(0, 10);
+          if (index < 5) {
+            console.log(`✅ 第${index + 1}条日期解析: ${it.created_at} -> ${date}`);
+          }
+          return date;
+        } catch (e) {
+          console.warn(`❌ 第${index + 1}条日期解析失败:`, it.created_at, e);
+          return null;
+        }
+      })
+      .filter(Boolean);
+
+    console.log('✅ 有效送出赞日期总数:', validDates.length);
+    console.log('📅 所有有效日期 (前20条):', validDates.slice(0, 20));
+
+    const givingDaysSet = new Set(validDates);
+    const sortedDays = Array.from(givingDaysSet).sort();
+    console.log('📅 去重后的送出赞日期 (全部):', sortedDays);
+    console.log('📊 送出赞分布统计:');
+    sortedDays.forEach(day => {
+      const count = validDates.filter(d => d === day).length;
+      console.log(`  ${day}: ${count}次点赞`);
+    });
+
+    const result = {
+      receivedOk: receiverSet.size >= LIKE_QUALITY.minReceivers,
+      givingOk: givingDaysSet.size >= LIKE_QUALITY.minGivingDays,
+      receiverSet: receiverSet.size,
+      givingDays: givingDaysSet.size,
+    };
+
+    console.log('📊 点赞质量计算结果:', result);
+    return result;
+  }
+
   /* ========== 等级进度计算 ========== */
   const calculateLevelProgress = (currentLevel, userData) => {
     if (!userData?.userSummary) return { items: [], achievedCount: 0, totalCount: 0 };
@@ -789,8 +1046,11 @@
         <p class="mjjbox-level-subtitle">当前等级：LV${level} ${currentName}</p>
         <p class="mjjbox-level-score">当前积分：${userData.gamification_score}</p>
       </div>
-      <div class="mjjbox-progress-section">
+      <div class="mjjbox-progress-section" id="progress-section">
         <h3>${level >= 4 ? '已达到最高等级' : `晋级到 LV${level + 1} ${levelNames[level + 1]} 的进度（${progress.achievedCount}/${progress.totalCount}）`}</h3>
+        <div id="like-quality-loading" style="text-align:center;padding:10px;color:#666;font-size:14px;">
+          🔍 正在检查点赞质量条款（隐藏门槛）...
+        </div>
         ${progress.items.map(item => {
           const cur = item.isTime ? `${item.current} 分钟` : item.current;
           const need = item.isTime ? `${item.required} 分钟` : item.required;
@@ -815,12 +1075,173 @@
             </div>`;
         }).join('')}
         ${progress.items.length === 0 ? '<div style="text-align:center;padding:20px;color:#666;">🎉 恭喜！您已达到最高等级！</div>' : ''}
+        <div id="upgrade-suggestion" style="margin-top:16px;padding:12px;background:#f8f9fa;border-radius:6px;font-size:13px;color:#666;display:none;">
+        </div>
       </div>
     `;
 
     modal.appendChild(content);
     setupModalEvents(modal);
+
+    // 异步检查点赞质量条款（仅对LV2用户且有晋级需求时检查）
+    if (level === 2 && progress.items.length > 0) {
+      checkLikeQuality(username, content, progress);
+    } else {
+      // 移除加载提示
+      const loadingDiv = content.querySelector('#like-quality-loading');
+      if (loadingDiv) loadingDiv.remove();
+    }
+
     return modal;
+  };
+
+  /* ========== 点赞质量检查函数 ========== */
+  const checkLikeQuality = async (username, content, progress) => {
+    try {
+      console.log('🔍 开始检查点赞质量条款...');
+      const likeRaw = await fetchLikeRawRecords(username);
+      const likeQ = calcLikeQuality(likeRaw, username);
+
+      console.log('📊 点赞质量检查结果:', {
+        receiverCount: likeQ.receiverSet,
+        givingDays: likeQ.givingDays,
+        receivedOk: likeQ.receivedOk,
+        givingOk: likeQ.givingOk
+      });
+
+      // 正常显示检查结果
+      const likeQualityHtml = `
+          <div class="mjjbox-progress-item" style="border-left: 3px solid #ff6b6b; padding-left: 12px; background: #fff5f5;">
+            <span class="mjjbox-progress-label">🔍 点赞质量（隐藏门槛）</span>
+            <div class="mjjbox-progress-bar-container">
+              <div class="mjjbox-progress-bar">
+                <div class="mjjbox-progress-fill ${likeQ.receivedOk ? '' : 'incomplete'}" style="width: ${Math.min(100, (likeQ.receiverSet / LIKE_QUALITY.minReceivers) * 100)}%"></div>
+              </div>
+              <span class="mjjbox-progress-required ${likeQ.receivedOk ? 'mjjbox-progress-done' : 'mjjbox-progress-undone'}">
+                收到赞来自 ≥${LIKE_QUALITY.minReceivers} 人 ${likeQ.receivedOk ? '✅' : '❌'}
+              </span>
+            </div>
+            <div class="mjjbox-progress-tooltip">
+              当前：<span class="${likeQ.receivedOk ? 'mjjbox-progress-done' : 'mjjbox-progress-undone'}">${likeQ.receiverSet} 人 ${likeQ.receivedOk ? '✅' : '❌'}</span>
+            </div>
+          </div>
+
+          <div class="mjjbox-progress-item" style="border-left: 3px solid #ff6b6b; padding-left: 12px; background: #fff5f5;">
+            <span class="mjjbox-progress-label">📅 送出赞分布天数</span>
+            <div class="mjjbox-progress-bar-container">
+              <div class="mjjbox-progress-bar">
+                <div class="mjjbox-progress-fill ${likeQ.givingOk ? '' : 'incomplete'}" style="width: ${Math.min(100, (likeQ.givingDays / LIKE_QUALITY.minGivingDays) * 100)}%"></div>
+              </div>
+              <span class="mjjbox-progress-required ${likeQ.givingOk ? 'mjjbox-progress-done' : 'mjjbox-progress-undone'}">
+                分布在 ≥${LIKE_QUALITY.minGivingDays} 天 ${likeQ.givingOk ? '✅' : '❌'}
+              </span>
+            </div>
+            <div class="mjjbox-progress-tooltip">
+              当前：<span class="${likeQ.givingOk ? 'mjjbox-progress-done' : 'mjjbox-progress-undone'}">${likeQ.givingDays} 天 ${likeQ.givingOk ? '✅' : '❌'}</span>
+            </div>
+          </div>`;
+
+      // 移除加载提示
+      const loadingDiv = content.querySelector('#like-quality-loading');
+      if (loadingDiv) loadingDiv.remove();
+
+      // 把新增 HTML 插到进度列表最前面
+      const section = content.querySelector('.mjjbox-progress-section');
+      const firstItem = section.querySelector('.mjjbox-progress-item');
+      if (firstItem) {
+        firstItem.insertAdjacentHTML('beforebegin', likeQualityHtml);
+      } else {
+        const h3 = section.querySelector('h3');
+        if (h3) {
+          h3.insertAdjacentHTML('afterend', likeQualityHtml);
+        }
+      }
+
+      // 生成升级建议
+      generateUpgradeSuggestion(content, progress, likeQ);
+
+    } catch (e) {
+      console.error('❌ 点赞质量检查异常:', e);
+      const loadingDiv = content.querySelector('#like-quality-loading');
+      if (loadingDiv) {
+        loadingDiv.innerHTML = `⚠️ 点赞质量检查失败: ${e.message}<br><small style="color:#999;">请查看浏览器控制台获取详细信息</small>`;
+        loadingDiv.style.color = '#f56565';
+      }
+    }
+  };
+
+  /* ========== 升级建议生成 ========== */
+  const generateUpgradeSuggestion = (content, progress, likeQ) => {
+    const suggestionDiv = content.querySelector('#upgrade-suggestion');
+    if (!suggestionDiv) return;
+
+    const allBasicMet = progress.achievedCount === progress.totalCount;
+    const allLikeQualityMet = likeQ.receivedOk && likeQ.givingOk;
+
+    let suggestion = '';
+    let bgColor = '#f8f9fa';
+    let textColor = '#666';
+
+    if (allBasicMet && allLikeQualityMet) {
+      // 所有条件都满足但仍未晋级
+      suggestion = `
+        <div style="color: #e53e3e; font-weight: 600; margin-bottom: 8px;">⚠️ 所有条件已满足，但仍无法晋级</div>
+        <div style="margin-bottom: 6px;"><strong>可能原因：</strong></div>
+        <div>• 管理员启用了「等级锁定」插件（Trust Level Locks）</div>
+        <div>• 系统未刷新等级状态，尝试重新登录或发帖触发</div>
+        <div>• 存在被隐藏的帖子影响了举报比例</div>
+        <div style="margin-top: 8px; color: #3182ce;"><strong>建议：</strong>私信管理员确认是否启用等级锁定</div>
+      `;
+      bgColor = '#fed7d7';
+      textColor = '#742a2a';
+    } else if (allBasicMet && !allLikeQualityMet) {
+      // 基础条件满足但点赞质量不达标
+      const issues = [];
+      if (!likeQ.receivedOk) {
+        issues.push(`收到赞来源不够分散（需要${LIKE_QUALITY.minReceivers}人，当前${likeQ.receiverSet}人）`);
+      }
+      if (!likeQ.givingOk) {
+        issues.push(`送出赞时间分布不够（需要${LIKE_QUALITY.minGivingDays}天，当前${likeQ.givingDays}天）`);
+      }
+
+      suggestion = `
+        <div style="color: #d69e2e; font-weight: 600; margin-bottom: 8px;">🔍 发现隐藏门槛问题</div>
+        <div style="margin-bottom: 6px;"><strong>问题：</strong></div>
+        ${issues.map(issue => `<div>• ${issue}</div>`).join('')}
+        <div style="margin-top: 8px; color: #3182ce;"><strong>建议：</strong></div>
+        <div>• 与更多不同用户互动，获得分散的点赞</div>
+        <div>• 每天适量点赞，避免集中在少数几天</div>
+        <div>• 暂停点赞3天后重新登录触发系统重评</div>
+      `;
+      bgColor = '#faf089';
+      textColor = '#744210';
+    } else {
+      // 基础条件未满足
+      const unmetItems = progress.items.filter(item => !item.isMet);
+      if (unmetItems.length > 0) {
+        suggestion = `
+          <div style="color: #3182ce; font-weight: 600; margin-bottom: 8px;">📋 还需完成以下基础条件</div>
+          ${unmetItems.slice(0, 3).map(item => {
+            const cur = item.isTime ? `${item.current} 分钟` : item.current;
+            const need = item.isTime ? `${item.required} 分钟` : item.required;
+            const diff = item.isTime ?
+              `还需 ${item.required - item.current} 分钟` :
+              `还需 ${item.required - item.current}`;
+            return `<div>• ${item.label}：${cur}/${need} ${item.isBoolean ? '' : `(${diff})`}</div>`;
+          }).join('')}
+          ${unmetItems.length > 3 ? `<div>• 还有 ${unmetItems.length - 3} 项条件...</div>` : ''}
+        `;
+        bgColor = '#e6fffa';
+        textColor = '#234e52';
+      }
+    }
+
+    if (suggestion) {
+      suggestionDiv.innerHTML = suggestion;
+      suggestionDiv.style.backgroundColor = bgColor;
+      suggestionDiv.style.color = textColor;
+      suggestionDiv.style.display = 'block';
+    }
   };
 
   /* ========== 设置面板 ========== */
