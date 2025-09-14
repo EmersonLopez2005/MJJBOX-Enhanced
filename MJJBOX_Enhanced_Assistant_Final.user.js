@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         MJJBOX 增强助手
 // @namespace    http://tampermonkey.net/
-// @version      3.3
-// @description  整合等级查看器与自定义背景、字体等美化功能，更新2024年9月15日新等级规则
-// @author       MJJBOX
+// @version      3.8
+// @description  完整版本
+// @author       Exia
 // @match        https://mjjbox.com/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
@@ -16,7 +16,7 @@
   'use strict';
   if (window !== window.top) return;
 
-  console.log('🚀 MJJBOX 增强助手启动');
+  console.log('🚀 MJJBOX 增强助手启动 v3.8');
 
   /* ========== 配置管理系统 ========== */
   const defaultConfig = {
@@ -106,42 +106,10 @@
       currentConfig.theme.accentColor = GM_getValue('mjjbox_theme_accent', '#28a745');
       currentConfig.theme.borderRadius = GM_getValue('mjjbox_theme_radius', '8px');
 
-      console.log('✅ 配置加载成功:', currentConfig);
+      console.log('✅ 配置加载完成:', currentConfig);
       return true;
     } catch (e) {
       console.error('❌ 加载配置失败:', e);
-      return false;
-    }
-  };
-
-  const clearConfig = () => {
-    try {
-      console.log('🗑️ 开始清除配置...');
-      GM_deleteValue('mjjbox_bg_enabled');
-      GM_deleteValue('mjjbox_bg_url');
-      GM_deleteValue('mjjbox_bg_mode');
-      GM_deleteValue('mjjbox_bg_opacity');
-      GM_deleteValue('mjjbox_bg_blur');
-      GM_deleteValue('mjjbox_bg_overlay_color');
-      GM_deleteValue('mjjbox_bg_overlay_opacity');
-
-      GM_deleteValue('mjjbox_font_enabled');
-      GM_deleteValue('mjjbox_font_family');
-      GM_deleteValue('mjjbox_font_size');
-      GM_deleteValue('mjjbox_font_weight');
-      GM_deleteValue('mjjbox_font_color');
-      GM_deleteValue('mjjbox_font_line_height');
-
-      GM_deleteValue('mjjbox_theme_enabled');
-      GM_deleteValue('mjjbox_theme_primary');
-      GM_deleteValue('mjjbox_theme_secondary');
-      GM_deleteValue('mjjbox_theme_accent');
-      GM_deleteValue('mjjbox_theme_radius');
-
-      console.log('✅ 配置清除成功');
-      return true;
-    } catch (e) {
-      console.error('❌ 清除配置失败:', e);
       return false;
     }
   };
@@ -158,7 +126,7 @@
     }
 
     let customCSS = `
-      /* 抖音美好体字体加载 */
+      /* 🎨 抖音美好体字体加载 */
       @font-face {
         font-family: 'DouyinSans';
         src: url('https://lf3-cdn-tos.bytecdntp.com/cdn/expire-1-M/douyinsans/1.0.0/DouyinSans-Regular.woff2') format('woff2');
@@ -216,8 +184,11 @@
       const lineHeight = font.lineHeight !== 'inherit' ? font.lineHeight : '';
 
       customCSS += `
-        /* 强制字体样式应用 */
-        * {
+        /* 字体样式应用 - 避免影响脚本UI */
+        body:not(.mjjbox-modal) .ember-application,
+        body:not(.mjjbox-modal) #main-outlet,
+        body:not(.mjjbox-modal) .topic-post,
+        body:not(.mjjbox-modal) .cooked {
           ${fontFamily ? `font-family: ${fontFamily} !important;` : ''}
           ${fontSize ? `font-size: ${fontSize} !important;` : ''}
           ${fontWeight ? `font-weight: ${fontWeight} !important;` : ''}
@@ -225,14 +196,13 @@
           ${lineHeight ? `line-height: ${lineHeight} !important;` : ''}
         }
 
-        body, .ember-application, #main-outlet, .topic-post, .cooked,
-        p, div, span, a, h1, h2, h3, h4, h5, h6, .btn, .form-control,
-        .topic-list-item, .topic-title, .post-content {
-          ${fontFamily ? `font-family: ${fontFamily} !important;` : ''}
-          ${fontSize ? `font-size: ${fontSize} !important;` : ''}
-          ${fontWeight ? `font-weight: ${fontWeight} !important;` : ''}
-          ${fontColor ? `color: ${fontColor} !important;` : ''}
-          ${lineHeight ? `line-height: ${lineHeight} !important;` : ''}
+        /* 确保脚本UI不受影响 */
+        .mjjbox-level-panel,
+        .mjjbox-modal,
+        .mjjbox-notification,
+        .mjjbox-floating-btn {
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+          color: #495057 !important;
         }
       `;
     }
@@ -242,9 +212,7 @@
       console.log('🎨 应用主题样式:', currentConfig.theme);
       const theme = currentConfig.theme;
       customCSS += `
-        /* 强制应用主题样式 - 使用通用选择器 */
-
-        /* 所有按钮 */
+        /* 强制应用主题样式 */
         button, .btn, input[type="button"], input[type="submit"] {
           background-color: ${theme.primaryColor} !important;
           border-color: ${theme.primaryColor} !important;
@@ -252,26 +220,17 @@
           border-radius: ${theme.borderRadius} !important;
         }
 
-        /* 所有链接 */
         a {
           color: ${theme.primaryColor} !important;
         }
 
-        /* 悬停效果 - 更精确的选择器 */
         button:hover, .btn:hover,
         a:hover:not([href^="#"]):not([href=""]),
-        .topic-list-item:hover, .latest-topic-list-item:hover,
-        .menu-item:hover, .nav-item:hover {
+        .topic-list-item:hover, .latest-topic-list-item:hover {
           background-color: ${theme.accentColor}30 !important;
           transition: background-color 0.2s ease !important;
         }
 
-        /* 避免过度应用悬停效果 */
-        body:hover, html:hover, .ember-application:hover {
-          background-color: transparent !important;
-        }
-
-        /* 表单元素 */
         input, textarea, select {
           border-color: ${theme.secondaryColor} !important;
           border-radius: ${theme.borderRadius} !important;
@@ -281,1101 +240,1179 @@
           border-color: ${theme.primaryColor} !important;
           box-shadow: 0 0 0 2px ${theme.primaryColor}30 !important;
         }
-
-        /* 卡片和容器 */
-        .card, .panel, .box, .container {
-          border-radius: ${theme.borderRadius} !important;
-          border-color: ${theme.secondaryColor} !important;
-        }
-
-        /* 导航和菜单项 */
-        .nav a, .menu a, .navbar a {
-          color: ${theme.primaryColor} !important;
-        }
-
-        .nav a:hover, .menu a:hover, .navbar a:hover,
-        .nav .active a, .menu .active a {
-          background-color: ${theme.primaryColor} !important;
-          color: #fff !important;
-        }
-
-        /* 标签和徽章 */
-        .tag, .badge, .label {
-          background-color: ${theme.accentColor} !important;
-          color: #fff !important;
-          border-radius: ${theme.borderRadius} !important;
-        }
-
-        /* 页面装饰 - 顶部主题色条（可选） */
-        body::after {
-          content: '';
-          position: fixed;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 2px;
-          background: linear-gradient(90deg, ${theme.primaryColor}, ${theme.accentColor});
-          z-index: 9999;
-          pointer-events: none;
-          opacity: 0.8;
-        }
-
-        /* 强制覆盖所有可能的按钮样式 */
-        * {
-          --primary-color: ${theme.primaryColor} !important;
-          --secondary-color: ${theme.secondaryColor} !important;
-          --accent-color: ${theme.accentColor} !important;
-          --border-radius: ${theme.borderRadius} !important;
-        }
-
-        /* 使用属性选择器强制应用 */
-        [class*="btn"], [class*="button"], [class*="link"] {
-          background-color: ${theme.primaryColor} !important;
-          border-color: ${theme.primaryColor} !important;
-          color: #fff !important;
-        }
-
-        [class*="btn"]:hover, [class*="button"]:hover {
-          background-color: ${theme.accentColor} !important;
-        }
       `;
     }
 
     if (customCSS.trim()) {
-      GM_addStyle(customCSS);
+      const styleElement = document.createElement('style');
+      styleElement.id = 'mjjbox-custom-styles';
+      styleElement.textContent = customCSS;
+      document.head.appendChild(styleElement);
       console.log('✅ 自定义样式已应用');
     } else {
       console.log('⚠️ 没有自定义样式需要应用');
     }
   };
 
-  const hexToRgb = (hex) => {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ?
-      `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` :
-      '0, 0, 0';
-  };
-
-  /* ========== 等级名称（与官方同步） ========== */
-  const levelNames = {
-    0: '青铜会员',
-    1: '白银会员',
-    2: '黄金会员',
-    3: '钻石会员',
-    4: '星曜会员'
-  };
-
-  /* ========== 官方晋级条件（2024年9月15日新规则） ========== */
-  const levelRequirements = {
-    1: {
-      topics_entered: 20,  // 从5提升到20
-      posts_read: 30,
-      time_read: 60 * 60   // 从10分钟提升到60分钟
-    },
-    2: {
-      days_visited: 15,
-      topics_entered: 20,
-      posts_read: 100,
-      time_read: 60 * 60,
-      posts_created: 1,
-      likes_received: 15,  // 从1提升到15
-      likes_given: 20,     // 从1提升到20
-      has_avatar: true,
-      has_bio: true
-    },
-    3: {
-      days_visited_in_100: 50,
-      topics_entered: 200,
-      posts_read: 500,
-      posts_created_in_100: 10,
-      likes_received: 50,  // 从20提升到50
-      likes_given: 100,    // 从30提升到100
-      flagged_posts_ratio: 0.05
-    },
-    4: {
-      manual_promotion: true
-    }
-  };
-
-  /* ========== 基础样式 ========== */
-  const baseStyles = `
-    .mjjbox-level-badge {
-      position: fixed; top: 20px; right: 20px;
-      width: 60px; height: 60px; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-weight: 700; font-size: 13px; color: #fff;
-      cursor: pointer; z-index: 9999;
-      box-shadow: 0 4px 20px rgba(0,0,0,.25);
-      transition: transform .3s,box-shadow .3s;
-      border: 3px solid #fff;
-    }
-    .mjjbox-level-badge:hover { transform: scale(1.12); box-shadow: 0 8px 30px rgba(0,0,0,.35); }
-    .mjjbox-level-badge.level-0 { background: linear-gradient(135deg,#9ca3af 0%,#6b7280 100%); }
-    .mjjbox-level-badge.level-1 { background: linear-gradient(135deg,#10b981 0%,#059669 100%); }
-    .mjjbox-level-badge.level-2 { background: linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%); }
-    .mjjbox-level-badge.level-3 { background: linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%); }
-    .mjjbox-level-badge.level-4 { background: linear-gradient(135deg,#f59e0b 0%,#d97706 100%); }
-
-    .mjjbox-settings-btn {
-      position: fixed; top: 90px; right: 20px;
-      width: 50px; height: 50px; border-radius: 50%;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border: 2px solid #fff;
-      display: flex; align-items: center; justify-content: center;
-      cursor: pointer; z-index: 9998;
-      box-shadow: 0 4px 15px rgba(0,0,0,.2);
-      transition: all .3s;
-      color: #fff; font-size: 18px;
-    }
-    .mjjbox-settings-btn:hover {
-      transform: scale(1.1);
-      box-shadow: 0 6px 25px rgba(0,0,0,.3);
-    }
-
-    .mjjbox-modal {
-      position: fixed; inset: 0;
-      background: rgba(0,0,0,.6); z-index: 10000;
-      opacity: 0; visibility: hidden;
-      transition: opacity .35s,visibility .35s;
-    }
-    .mjjbox-modal.show { opacity: 1; visibility: visible; }
-
-    .mjjbox-modal-content {
-      position: absolute;
-      background: #ffffff;
-      border: 1px solid #e1e5e9;
-      border-radius: 16px;
-      max-width: 90vw; max-height: 85vh;
-      padding: 28px 30px 36px;
-      box-shadow: 0 20px 60px rgba(0,0,0,.15);
-      overflow-y: auto;
-      transform: scale(.92) translateY(-30px);
-      transition: transform .35s;
-    }
-    .mjjbox-modal.show .mjjbox-modal-content { transform: scale(1) translateY(0); }
-
-    .mjjbox-close-btn {
-      position: absolute; top: 12px; right: 16px;
-      background: none; border: none;
-      font-size: 28px; cursor: pointer; color: #666;
-      transition: color .2s;
-    }
-    .mjjbox-close-btn:hover { color: #000; }
-
-    .mjjbox-level-modal-content { width: 420px; }
-    .mjjbox-level-header { text-align: center; margin-bottom: 24px; }
-    .mjjbox-level-title { margin: 0; font-size: 24px; font-weight: 700; color: #000; }
-    .mjjbox-level-subtitle, .mjjbox-level-score { margin: 4px 0 0; font-size: 15px; color: #666; }
-
-    .mjjbox-progress-section h3 { margin: 0 0 18px; font-size: 17px; color: #000; }
-    .mjjbox-progress-item { margin-bottom: 14px; }
-    .mjjbox-progress-label { display: block; font-weight: 600; margin-bottom: 6px; color: #000; }
-    .mjjbox-progress-bar-container { display: flex; align-items: center; gap: 12px; }
-    .mjjbox-progress-bar { flex: 1; height: 8px; background: #f3f4f6; border-radius: 4px; overflow: hidden; }
-    .mjjbox-progress-fill { height: 100%; background: linear-gradient(90deg,#10b981 0%,#34d399 100%); transition: width .4s; }
-    .mjjbox-progress-fill.incomplete { background: linear-gradient(90deg,#f87171 0%,#fca5a5 100%); }
-    .mjjbox-progress-required, .mjjbox-progress-tooltip { font-size: 13px; color: #666; }
-    .mjjbox-progress-undone { color: #ef4444; }
-    .mjjbox-progress-done { color: #10b981; }
-
-    .mjjbox-settings-modal-content { width: 500px; }
-    .mjjbox-settings-header { text-align: center; margin-bottom: 24px; }
-    .mjjbox-settings-title { margin: 0; font-size: 22px; font-weight: 700; color: #000; }
-    .mjjbox-settings-subtitle { margin: 8px 0 0; font-size: 14px; color: #666; }
-
-    .mjjbox-settings-tabs {
-      display: flex; margin-bottom: 20px; border-bottom: 2px solid #f0f0f0;
-    }
-    .mjjbox-settings-tab {
-      flex: 1; padding: 12px; text-align: center; cursor: pointer;
-      background: none; border: none; font-size: 14px; font-weight: 600;
-      color: #666; transition: all .2s;
-      border-bottom: 2px solid transparent;
-    }
-    .mjjbox-settings-tab.active {
-      color: #007bff; border-bottom-color: #007bff;
-    }
-    .mjjbox-settings-tab:hover { color: #007bff; }
-
-    .mjjbox-settings-content { min-height: 300px; }
-    .mjjbox-settings-panel { display: none; }
-    .mjjbox-settings-panel.active { display: block; }
-
-    .mjjbox-form-group {
-      margin-bottom: 20px;
-    }
-    .mjjbox-form-label {
-      display: block; margin-bottom: 8px; font-weight: 600; color: #333;
-    }
-    .mjjbox-form-control {
-      width: 100%; padding: 10px 12px; border: 2px solid #e1e5e9;
-      border-radius: 6px; font-size: 14px; transition: border-color .2s;
-    }
-    .mjjbox-form-control:focus {
-      outline: none; border-color: #007bff;
-    }
-    .mjjbox-form-check {
-      display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
-    }
-    .mjjbox-form-check input[type="checkbox"] {
-      width: 18px; height: 18px;
-    }
-    .mjjbox-form-check label {
-      margin: 0; font-weight: 500; color: #333; cursor: pointer;
-    }
-
-    .mjjbox-form-row {
-      display: flex; gap: 12px;
-    }
-    .mjjbox-form-col {
-      flex: 1;
-    }
-
-    .mjjbox-btn {
-      padding: 10px 20px; border: none; border-radius: 6px;
-      font-size: 14px; font-weight: 600; cursor: pointer;
-      transition: all .2s;
-    }
-    .mjjbox-btn-primary {
-      background: #007bff; color: #fff;
-    }
-    .mjjbox-btn-primary:hover {
-      background: #0056b3;
-    }
-    .mjjbox-btn-secondary {
-      background: #6c757d; color: #fff;
-    }
-    .mjjbox-btn-secondary:hover {
-      background: #545b62;
-    }
-    .mjjbox-btn-danger {
-      background: #dc3545; color: #fff;
-    }
-    .mjjbox-btn-danger:hover {
-      background: #c82333;
-    }
-
-    .mjjbox-settings-actions {
-      display: flex; gap: 12px; justify-content: flex-end;
-      margin-top: 24px; padding-top: 20px;
-      border-top: 1px solid #e1e5e9;
-    }
-
-    .mjjbox-color-preview {
-      width: 30px; height: 30px; border-radius: 4px;
-      border: 2px solid #ddd; display: inline-block;
-      vertical-align: middle; margin-left: 8px;
-    }
-
-    .mjjbox-file-input-wrapper {
-      position: relative; display: inline-block;
-    }
-    .mjjbox-file-input {
-      position: absolute; opacity: 0; width: 100%; height: 100%;
-      cursor: pointer;
-    }
-    .mjjbox-file-input-label {
-      display: inline-block; padding: 8px 16px;
-      background: #f8f9fa; border: 2px dashed #dee2e6;
-      border-radius: 6px; cursor: pointer; transition: all .2s;
-    }
-    .mjjbox-file-input-label:hover {
-      background: #e9ecef; border-color: #007bff;
-    }
-
-    .mjjbox-notification {
-      position: fixed; top: 90px; right: 24px;
-      padding: 12px 18px; border-radius: 8px;
-      color: #fff; font-weight: 600; z-index: 10001;
-      opacity: 0; transform: translateX(120%);
-      transition: all .3s;
-    }
-    .mjjbox-notification.success { background: #10b981; }
-    .mjjbox-notification.error { background: #ef4444; }
-    .mjjbox-notification.info { background: #007bff; }
-    .mjjbox-notification.show { opacity: 1; transform: translateX(0); }
-  `;
-
-  /* ========== 通用工具函数 ========== */
+  /* ========== 用户数据获取 ========== */
   const getCurrentUsername = () => {
     try {
+      // 🎯 使用2.7版本的方法：Discourse API
       if (typeof Discourse !== 'undefined' && Discourse.User && Discourse.User.current()) {
         return Discourse.User.current()?.username || null;
+      }
+
+      // 备用方法：从URL路径获取
+      const pathMatch = window.location.pathname.match(/\/u\/([^\/]+)/);
+      if (pathMatch) {
+        return pathMatch[1];
+      }
+
+      // 备用方法：从DOM元素获取
+      const userElement = document.querySelector('.current-user .username, .header-dropdown-toggle .username, [data-user-card]');
+      if (userElement) {
+        return userElement.textContent.trim().replace('@', '');
       }
     } catch (e) {
       console.error('获取用户名失败:', e);
     }
+
     return null;
   };
 
-  const showNotification = (msg, type = 'info', dur = 3000) => {
-    console.log(`📢 通知: ${msg}`);
-
-    // 移除旧通知
-    const oldNotification = document.querySelector('.mjjbox-notification');
-    if (oldNotification) {
-      oldNotification.remove();
+  const fetchUserData = async (username) => {
+    if (!username) {
+      throw new Error('用户名不能为空');
     }
 
-    const notification = document.createElement('div');
-    notification.className = `mjjbox-notification ${type}`;
-    notification.textContent = msg;
-    document.body.appendChild(notification);
+    console.log('🔍 开始获取用户数据:', username);
 
-    // 显示动画
-    setTimeout(() => {
-      notification.classList.add('show');
-    }, 100);
+    // 🎯 优先尝试管理员API获取官方数据
+    try {
+      console.log('🔑 尝试管理员API获取官方数据');
 
-    // 隐藏动画
-    setTimeout(() => {
-      notification.classList.remove('show');
-      setTimeout(() => {
-        if (notification.parentNode) {
-          notification.remove();
-        }
-      }, 300);
-    }, dur);
-  };
-
-  /* ========== 等级徽章系统 ========== */
-  const createLevelBadge = () => {
-    const badge = document.createElement('div');
-    badge.className = 'mjjbox-level-badge';
-    badge.textContent = 'LV ?';
-    badge.title = '点击查看等级进度';
-    badge.addEventListener('click', fetchUserLevel);
-    document.body.appendChild(badge);
-    return badge;
-  };
-
-  const updateLevelBadge = (level, username) => {
-    const badge = document.querySelector('.mjjbox-level-badge');
-    if (!badge) return;
-    badge.textContent = `LV ${level}`;
-    badge.className = `mjjbox-level-badge level-${level}`;
-    badge.title = `${username} - ${levelNames[level] || '未知等级'}（点击查看详情）`;
-  };
-
-  /* ========== 设置按钮 ========== */
-  const createSettingsButton = () => {
-    const btn = document.createElement('div');
-    btn.className = 'mjjbox-settings-btn';
-    btn.innerHTML = '⚙️';
-    btn.title = '打开设置面板';
-    btn.addEventListener('click', openSettingsModal);
-    document.body.appendChild(btn);
-    return btn;
-  };
-
-  /* ========== 数据获取（等级查看器） ========== */
-  const fetchUserLevel = () => {
-    const username = getCurrentUsername();
-    if (!username) return showNotification('❌ 无法获取当前用户名', 'error');
-
-    let summaryData = null;
-    let userData = null;
-    let readingData = null;
-    let done = 0;
-    const checkDone = () => {
-      done++;
-      if (done === 3) processUserData(summaryData, userData, readingData, username);
-    };
-
-    GM_xmlhttpRequest({
-      method: 'GET',
-      url: `https://mjjbox.com/u/${username}/summary.json`,
-      timeout: 15000,
-      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-      onload: resp => { if (resp.status === 200) { try { summaryData = JSON.parse(resp.responseText); } catch {} } checkDone(); },
-      onerror: checkDone
-    });
-    GM_xmlhttpRequest({
-      method: 'GET',
-      url: `https://mjjbox.com/u/${username}.json`,
-      timeout: 15000,
-      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-      onload: resp => { if (resp.status === 200) { try { userData = JSON.parse(resp.responseText); } catch {} } checkDone(); },
-      onerror: checkDone
-    });
-    // 获取用户阅读活动数据 - 增加limit参数获取更多记录
-    GM_xmlhttpRequest({
-      method: 'GET',
-      url: `https://mjjbox.com/user_actions.json?username=${username}&filter=5&offset=0&limit=200`,
-      timeout: 15000,
-      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-      onload: resp => { if (resp.status === 200) { try { readingData = JSON.parse(resp.responseText); } catch {} } checkDone(); },
-      onerror: checkDone
-    });
-  };
-
-  const processUserData = (summaryData, userData, readingData, username) => {
-    if (!summaryData || !userData) return showNotification('❌ 获取用户数据失败', 'error');
-
-    const user = userData.user || summaryData.users?.[0];
-    const userSummary = summaryData.user_summary;
-
-    // 智能计算帖子阅读唯一日期数据
-    let postsReadUniqueDays = 0;
-
-    if (readingData && readingData.user_actions && readingData.user_actions.length > 0) {
-      // 从阅读活动数据中提取唯一日期
-      const uniqueDates = new Set();
-      const now = new Date();
-      const hundredDaysAgo = new Date(now.getTime() - (100 * 24 * 60 * 60 * 1000));
-
-      readingData.user_actions.forEach(action => {
-        if (action.action_type === 5) { // 阅读帖子的action_type
-          const actionDate = new Date(action.created_at);
-          if (actionDate >= hundredDaysAgo) {
-            const dateStr = actionDate.toISOString().split('T')[0]; // YYYY-MM-DD格式
-            uniqueDates.add(dateStr);
-          }
-        }
+      // 🎯 先获取用户ID，然后用ID访问管理员API
+      const publicData = await new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+          method: 'GET',
+          url: `https://mjjbox.com/u/${username}.json`,
+          timeout: 10000,
+          headers: {
+            Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          onload: (resp) => {
+            if (resp.status === 200) {
+              try {
+                const data = JSON.parse(resp.responseText);
+                console.log('✅ 获取用户ID成功');
+                resolve(data);
+              } catch (e) {
+                reject(e);
+              }
+            } else {
+              reject(new Error(`HTTP ${resp.status}`));
+            }
+          },
+          onerror: reject
+        });
       });
 
-      postsReadUniqueDays = uniqueDates.size;
-
-      // 如果API数据不足（少于预期），使用估算方法
-      if (readingData.user_actions.length >= 200 || postsReadUniqueDays < 10) {
-        // 基于总阅读数和访问天数进行智能估算
-        const totalPostsRead = userSummary?.posts_read_count || 0;
-        const daysVisited = userSummary?.days_visited || 0;
-
-        // 优化估算公式：基于实际用户行为模式
-        const estimatedReadingDays = Math.min(
-          Math.floor(totalPostsRead / 16), // 根据708帖子→44天，约16帖子/天
-          Math.floor(daysVisited * 0.9),   // 提高到90%的访问日有阅读
-          Math.floor(totalPostsRead * 0.062), // 基于观察到的比例调整
-          100 // 最大不超过100天
-        );
-
-        // 取实际计算值和估算值的较大者
-        postsReadUniqueDays = Math.max(postsReadUniqueDays, estimatedReadingDays);
-
-        console.log('📊 使用智能估算算法:', postsReadUniqueDays, '天');
-        console.log('📊 估算基于: 总阅读数', totalPostsRead, ', 访问天数', daysVisited);
-      } else {
-        console.log('📊 使用API数据计算:', postsReadUniqueDays, '天');
+      const userId = publicData.user?.id;
+      if (!userId) {
+        throw new Error('无法获取用户ID');
       }
-    } else {
-      // 完全基于用户统计数据的估算
-      const totalPostsRead = userSummary?.posts_read_count || 0;
-      const daysVisited = userSummary?.days_visited || 0;
 
-      // 优化保守估算：基于观察到的用户模式
-      postsReadUniqueDays = Math.min(
-        Math.floor(totalPostsRead / 16), // 基于708→44的比例
-        Math.floor(daysVisited * 0.8),   // 80%的访问日有阅读活动
-        Math.floor(totalPostsRead * 0.062), // 6.2%的转换率
-        100
-      );
+      console.log('🔍 用户ID:', userId);
 
-      console.log('📊 使用保守估算方法:', postsReadUniqueDays, '天');
-      console.log('📊 基于总阅读数:', totalPostsRead, ', 访问天数:', daysVisited);
+      const adminData = await new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+          method: 'GET',
+          url: `https://mjjbox.com/admin/users/${userId}.json`,
+          timeout: 10000,
+          headers: {
+            Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          onload: (resp) => {
+            if (resp.status === 200) {
+              try {
+                const data = JSON.parse(resp.responseText);
+                console.log('✅ 管理员API响应成功');
+                resolve(data);
+              } catch (e) {
+                reject(e);
+              }
+            } else {
+              reject(new Error(`HTTP ${resp.status}`));
+            }
+          },
+          onerror: reject
+        });
+      });
+
+      // 🎯 从管理员API获取官方阅读天数
+      const tl3Requirements = adminData.tl3_requirements;
+      const officialReadingDays = tl3Requirements?.days_visited || 0;
+
+      console.log('🎯 管理员API获取成功，官方阅读天数:', officialReadingDays);
+      console.log('🔍 完整的tl3_requirements数据:', tl3Requirements);
+      console.log('🔍 完整的adminData数据:', adminData);
+
+      // 🔍 详细分析赞数据的位置
+      console.log('🔍 赞数据分析:');
+      console.log('  - tl3_requirements.likes_given:', tl3Requirements?.likes_given);
+      console.log('  - tl3_requirements.likes_received:', tl3Requirements?.likes_received);
+      console.log('  - adminData.likes_given:', adminData?.likes_given);
+      console.log('  - adminData.likes_received:', adminData?.likes_received);
+      console.log('  - adminData.user?.likes_given:', adminData?.user?.likes_given);
+      console.log('  - adminData.user?.likes_received:', adminData?.user?.likes_received);
+
+      // 🔍 查找所有可能包含赞数据的字段
+      const findLikesData = (obj, path = '') => {
+        if (!obj || typeof obj !== 'object') return;
+
+        Object.keys(obj).forEach(key => {
+          const value = obj[key];
+          const currentPath = path ? `${path}.${key}` : key;
+
+          if (key.includes('like') || key.includes('Like')) {
+            console.log(`  - 发现赞相关字段 ${currentPath}:`, value);
+          }
+
+          if (typeof value === 'object' && value !== null) {
+            findLikesData(value, currentPath);
+          }
+        });
+      };
+
+      console.log('🔍 搜索所有赞相关字段:');
+      findLikesData(adminData);
+
+      // 🎯 同时获取公开API的summary数据作为备用
+      console.log('🔍 同时获取summary数据作为赞数据备用源');
+      try {
+        const summaryResponse = await new Promise((resolve, reject) => {
+          GM_xmlhttpRequest({
+            method: 'GET',
+            url: `https://mjjbox.com/u/${username}/summary.json`,
+            timeout: 10000,
+            headers: {
+              Accept: 'application/json',
+              'X-Requested-With': 'XMLHttpRequest'
+            },
+            onload: resolve,
+            onerror: reject
+          });
+        });
+
+        const summaryData = JSON.parse(summaryResponse.responseText);
+        console.log('📊 Summary数据获取成功:', summaryData);
+
+        // 将summary数据也加入到返回结果中
+        return {
+          source: 'admin_api',
+          data: adminData,
+          summaryData: summaryData,
+          tl3_requirements: tl3Requirements,
+          officialReadingDays: officialReadingDays
+        };
+
+      } catch (summaryError) {
+        console.log('⚠️ Summary数据获取失败:', summaryError);
+        return {
+          source: 'admin_api',
+          data: adminData,
+          summaryData: null,
+          tl3_requirements: tl3Requirements,
+          officialReadingDays: officialReadingDays
+        };
+      }
+
+      return {
+        source: 'admin_api',
+        data: adminData,
+        tl3_requirements: tl3Requirements,
+        officialReadingDays: officialReadingDays
+      };
+
+    } catch (adminError) {
+      console.log('⚠️ 管理员API失败，尝试公开API:', adminError.message);
     }
 
-    // 将计算出的数据添加到userSummary中
-    if (userSummary) {
-      userSummary.posts_read_unique_days = postsReadUniqueDays;
-    }
+    // 备用方案：使用公开API + summary API获取完整数据
+    try {
+      console.log('📡 请求公开用户API和summary API');
 
-    // 详细调试信息
-    console.log('📊 用户数据调试信息:');
-    console.log('- userSummary:', userSummary);
-    console.log('- user:', user);
-    console.log('- readingData:', readingData);
-    console.log('- 计算出的帖子阅读唯一日期:', postsReadUniqueDays);
+      const [publicData, summaryData] = await Promise.all([
+        new Promise((resolve, reject) => {
+          GM_xmlhttpRequest({
+            method: 'GET',
+            url: `https://mjjbox.com/u/${username}.json`,
+            timeout: 10000,
+            headers: {
+              Accept: 'application/json',
+              'X-Requested-With': 'XMLHttpRequest'
+            },
+            onload: (resp) => {
+              if (resp.status === 200) {
+                try {
+                  const data = JSON.parse(resp.responseText);
+                  console.log('✅ 公开API响应成功');
+                  resolve(data);
+                } catch (e) {
+                  reject(e);
+                }
+              } else {
+                reject(new Error(`HTTP ${resp.status}`));
+              }
+            },
+            onerror: reject
+          });
+        }),
+        new Promise((resolve, reject) => {
+          GM_xmlhttpRequest({
+            method: 'GET',
+            url: `https://mjjbox.com/u/${username}/summary.json`,
+            timeout: 10000,
+            headers: {
+              Accept: 'application/json',
+              'X-Requested-With': 'XMLHttpRequest'
+            },
+            onload: (resp) => {
+              if (resp.status === 200) {
+                try {
+                  const data = JSON.parse(resp.responseText);
+                  console.log('✅ Summary API响应成功');
+                  resolve(data);
+                } catch (e) {
+                  reject(e);
+                }
+              } else {
+                reject(new Error(`HTTP ${resp.status}`));
+              }
+            },
+            onerror: reject
+          });
+        })
+      ]);
 
-    if (userSummary) {
-      console.log('- posts_read_count:', userSummary.posts_read_count);
-      console.log('- days_visited:', userSummary.days_visited);
-      console.log('- topics_entered:', userSummary.topics_entered);
-    }
+      // 🎯 参考2.7版本的数据处理方式
+      const user = publicData.user || summaryData.users?.[0];
+      const userSummary = summaryData.user_summary;
 
-    if (user && typeof user.trust_level === 'number') {
-      const level = user.trust_level;
-      updateLevelBadge(level, username);
-      showNotification(`✅ 等级信息获取成功：LV${level} ${levelNames[level]}`, 'success', 2000);
-      const modal = createLevelModal({ level, username, userData: { user, userSummary, gamification_score: user.gamification_score || 0 } });
-      document.body.appendChild(modal);
-      setTimeout(() => modal.classList.add('show'), 10);
-    } else {
-      showNotification('❌ 无法解析用户等级信息', 'error');
+      console.log('📊 原始用户数据:', { user, userSummary });
+
+      // 合并数据，确保获取到完整的用户统计信息
+      const mergedData = {
+        user: user,
+        userSummary: userSummary
+      };
+
+      console.log('📊 合并后的用户数据:', mergedData);
+
+      return {
+        source: 'public_api',
+        data: mergedData,
+        tl3_requirements: null,
+        officialReadingDays: 0 // 公开API没有官方数据
+      };
+
+    } catch (publicError) {
+      console.error('❌ 所有API都失败了:', publicError);
+      throw new Error('无法获取用户数据');
     }
   };
 
   /* ========== 等级进度计算 ========== */
-  const calculateLevelProgress = (currentLevel, userData) => {
-    if (!userData?.userSummary) return { items: [], achievedCount: 0, totalCount: 0 };
-    const us = userData.userSummary;
-    const u = userData.user;
-    const next = currentLevel + 1;
-    const req = levelRequirements[next];
-    if (!req) return { items: [{ label: '升级方式', current: '联系管理员', required: '手动提升', isMet: false }], achievedCount: 0, totalCount: 1 };
+  const calculateLevelProgress = (userData) => {
+    console.log('📊 开始计算等级进度，数据源:', userData.source);
 
-    const items = [];
-    let achieved = 0;
-    const add = (label, current, required, isTime = false, isPercentage = false) => {
-      const met = current >= required;
-      items.push({ label, current, required, isMet: met, percentage: Math.min((current / required) * 100, 100), isTime, isPercentage });
-      if (met) achieved++;
+    const user = userData.data.user || userData.data;
+    const userSummary = userData.data.userSummary;
+    const tl3Req = userData.tl3_requirements;
+
+    // 🎯 使用官方阅读天数数据
+    const officialReadingDays = userData.officialReadingDays;
+    console.log('🎯 官方阅读天数:', officialReadingDays);
+
+    // 🎯 参考2.7版本的数据获取方式
+    const trustLevel = user?.trust_level || 0;
+    const daysVisited = userSummary?.days_visited || user?.days_visited || 0;
+    const postsRead = userSummary?.posts_read_count || user?.posts_read_count || 0;
+    const topicsEntered = userSummary?.topics_entered || user?.topics_entered || 0;
+    const postCount = userSummary?.post_count || user?.post_count || 0;
+
+    // 🎯 关键修复：多数据源获取赞数据
+    let likesGiven = 0;
+    let likesReceived = 0;
+
+    // 🎯 优先从 summaryData 获取（如果有的话）
+    const summaryData = userData.summaryData;
+    if (summaryData?.user_summary) {
+      likesGiven = summaryData.user_summary.likes_given || 0;
+      likesReceived = summaryData.user_summary.likes_received || 0;
+      console.log('🎯 从summaryData.user_summary获取赞数据:', { likesGiven, likesReceived });
+    }
+
+    // 如果summary数据为0或不存在，尝试从tl3_requirements获取
+    if ((likesGiven === 0 && likesReceived === 0) && tl3Req) {
+      likesGiven = tl3Req.likes_given || 0;
+      likesReceived = tl3Req.likes_received || 0;
+      console.log('🎯 从tl3_requirements获取赞数据:', { likesGiven, likesReceived });
+    }
+
+    // 如果还是0，尝试从userSummary获取
+    if ((likesGiven === 0 && likesReceived === 0) && userSummary) {
+      likesGiven = userSummary.likes_given || 0;
+      likesReceived = userSummary.likes_received || 0;
+      console.log('📊 从userSummary获取赞数据:', { likesGiven, likesReceived });
+    }
+
+    // 最后备用：从user获取
+    if ((likesGiven === 0 && likesReceived === 0) && user) {
+      likesGiven = user.likes_given || 0;
+      likesReceived = user.likes_received || 0;
+      console.log('📊 从user获取赞数据:', { likesGiven, likesReceived });
+    }
+
+    // 🔍 输出最终的赞数据结果
+    console.log('🎯 最终赞数据结果:', {
+      likesGiven,
+      likesReceived,
+      dataSource: summaryData ? 'summary' : (tl3Req ? 'tl3_requirements' : (userSummary ? 'userSummary' : 'user'))
+    });
+
+    console.log('📊 用户基础数据:', {
+      trustLevel, daysVisited, postsRead, topicsEntered,
+      postCount, likesGiven, likesReceived, officialReadingDays
+    });
+
+    // 2025年9月15日最新等级要求
+    const requirements = {
+      1: { daysVisited: 1, topicsEntered: 5, postsRead: 30, timeOnSite: 10 },
+      2: { daysVisited: 15, topicsEntered: 20, postsRead: 100, timeOnSite: 60, likesReceived: 1, likesGiven: 1, topicsRepliedTo: 3 },
+      3: {
+        daysVisited: 50,
+        topicsEntered: 25,
+        postsRead: 25,
+        timeOnSite: 60,
+        likesReceived: 20,
+        likesGiven: 30,
+        topicsRepliedTo: 10,
+        // 🎯 隐藏条件：帖子阅读唯一日期占比
+        postsReadUniqueDays: 50  // 需要50天
+      }
     };
 
-    const daysVisited100 = us.days_visited || 0;
+    const targetLevel = Math.min(trustLevel + 1, 3);
+    const req = requirements[targetLevel];
 
-    if (req.topics_entered !== undefined) add('阅读主题数', us.topics_entered || 0, req.topics_entered);
-    if (req.posts_read !== undefined) add('阅读帖子数', us.posts_read_count || 0, req.posts_read);
-    if (req.time_read !== undefined) add('总阅读时间（分钟）', Math.floor((us.time_read || 0) / 60), Math.floor(req.time_read / 60), true);
-    if (req.days_visited !== undefined) add('累计访问天数', us.days_visited || 0, req.days_visited);
-    if (req.days_visited_in_100 !== undefined) add('过去100天内访问天数', daysVisited100, req.days_visited_in_100);
-
-    if (req.posts_created !== undefined) add('累计发帖数', us.topic_count || 0, req.posts_created);
-    if (req.posts_created_in_100 !== undefined) add('过去100天内发帖/回复数', (us.topic_count || 0) + (us.post_count || 0), req.posts_created_in_100);
-    if (req.likes_received !== undefined) add('收到赞数', us.likes_received || 0, req.likes_received);
-    if (req.likes_given !== undefined) add('送出赞数', us.likes_given || 0, req.likes_given);
-
-    if (req.has_avatar !== undefined) {
-      const has = !!(u.avatar_template && !u.avatar_template.includes('letter_avatar') && !u.avatar_template.includes('system_avatar'));
-      items.push({ label: '已上传头像', current: has ? '已上传' : '未上传', required: '已上传', isMet: has, isBoolean: true });
-      if (has) achieved++;
-    }
-    if (req.has_bio !== undefined) {
-      const has = !!(u.bio_raw && u.bio_raw.trim());
-      items.push({ label: '已填写基本资料', current: has ? '已填写' : '未填写', required: '已填写', isMet: has, isBoolean: true });
-      if (has) achieved++;
+    if (!req) {
+      return { currentLevel: trustLevel, targetLevel, progress: [], canLevelUp: trustLevel >= 3 };
     }
 
-    if (req.flagged_posts_ratio !== undefined) {
-      const flaggedRatio = 0;
-      items.push({ label: '被举报/隐藏帖子比例', current: `${(flaggedRatio * 100).toFixed(1)}%`, required: `${(req.flagged_posts_ratio * 100).toFixed(0)}% 以内`, isMet: flaggedRatio <= req.flagged_posts_ratio });
-      if (flaggedRatio <= req.flagged_posts_ratio) achieved++;
+    const progress = [];
+
+    // 基础条件
+    const add = (name, current, required, isHidden = false) => {
+      const percentage = required > 0 ? Math.min((current / required) * 100, 100) : 100;
+      const item = {
+        name,
+        current,
+        required,
+        percentage: Math.round(percentage),
+        completed: current >= required,
+        isHidden
+      };
+      progress.push(item);
+      console.log(`📊 ${name}: ${current}/${required} (${item.percentage}%)`);
+    };
+
+    add('访问天数', daysVisited, req.daysVisited);
+    add('进入主题数', topicsEntered, req.topicsEntered);
+    add('阅读帖子数', postsRead, req.postsRead);
+
+    if (req.likesReceived) add('获得赞数', likesReceived, req.likesReceived);
+    if (req.likesGiven) add('给出赞数', likesGiven, req.likesGiven);
+    if (req.topicsRepliedTo) add('回复主题数', postCount, req.topicsRepliedTo);
+
+    // 🎯 隐藏条件：使用官方阅读天数
+    if (req.postsReadUniqueDays) {
+      console.log('🎯 添加隐藏条件 - 官方阅读天数:', officialReadingDays);
+      add('过去100天内阅读天数', officialReadingDays, req.postsReadUniqueDays, true);
     }
 
-    items.sort((a, b) => (a.isMet ? 1 : -1));
-    return { items, achievedCount: achieved, totalCount: items.length };
+    const canLevelUp = progress.every(item => item.completed);
+
+    console.log('📊 等级进度计算完成:', {
+      currentLevel: trustLevel,
+      targetLevel,
+      canLevelUp,
+      progressCount: progress.length,
+      completedCount: progress.filter(p => p.completed).length
+    });
+
+    return { currentLevel: trustLevel, targetLevel, progress, canLevelUp };
   };
 
-  /* ========== 等级查看器模态框 ========== */
-  const createLevelModal = ({ level, username, userData }) => {
-    const modal = document.createElement('div');
-    modal.className = 'mjjbox-modal';
+  /* ========== UI 组件 ========== */
+  let panel = null;
+  let isLoading = false;
 
-    const progress = calculateLevelProgress(level, userData);
-    const currentName = levelNames[level] || '未知等级';
+  const showNotification = (message, type = 'info') => {
+    const notification = document.createElement('div');
+    notification.className = `mjjbox-notification mjjbox-notification-${type}`;
+    notification.textContent = message;
 
-    const content = document.createElement('div');
-    content.className = 'mjjbox-modal-content mjjbox-level-modal-content';
+    const style = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 12px 20px;
+      border-radius: 6px;
+      color: white;
+      font-weight: 500;
+      z-index: 10001;
+      opacity: 0;
+      transform: translateX(100%);
+      transition: all 0.3s ease;
+      max-width: 300px;
+      word-wrap: break-word;
+    `;
 
-    const badgeRect = document.querySelector('.mjjbox-level-badge').getBoundingClientRect();
-    let top = badgeRect.bottom + 18;
-    let right = window.innerWidth - badgeRect.right;
-    if (top + 500 > window.innerHeight) top = badgeRect.top - 500 - 18;
-    if (right - 420 < 0) right = 10;
-    content.style.top = `${top}px`;
-    content.style.right = `${right}px`;
+    const colors = {
+      success: 'background: #28a745;',
+      error: 'background: #dc3545;',
+      warning: 'background: #ffc107; color: #212529;',
+      info: 'background: #17a2b8;'
+    };
 
-    content.innerHTML = `
-      <button class="mjjbox-close-btn">&times;</button>
-      <div class="mjjbox-level-header">
-        <h2 class="mjjbox-level-title">${username}</h2>
-        <p class="mjjbox-level-subtitle">当前等级：LV${level} ${currentName}</p>
-        <p class="mjjbox-level-score">当前积分：${userData.gamification_score}</p>
-      </div>
-      <div class="mjjbox-progress-section" id="progress-section">
-        <h3>${level >= 4 ? '已达到最高等级' : `晋级到 LV${level + 1} ${levelNames[level + 1]} 的进度（${progress.achievedCount}/${progress.totalCount}）`}</h3>
+    notification.style.cssText = style + (colors[type] || colors.info);
+    document.body.appendChild(notification);
 
-        ${progress.items.map(item => {
-          const cur = item.isTime ? `${item.current} 分钟` :
-                     item.label.includes('唯一日期') ? `${item.current} 天 (${Math.round((item.current / 100) * 100)}%)` :
-                     item.current;
-          const need = item.isTime ? `${item.required} 分钟` :
-                      item.label.includes('唯一日期') ? `${item.required} 天 (${Math.round((item.required / 100) * 100)}%)` :
-                      item.required;
-          const met = item.isMet;
-          const icon = met ? '✅' : '❌';
-          return `
-            <div class="mjjbox-progress-item">
-              <span class="mjjbox-progress-label">${item.label}</span>
-              <div class="mjjbox-progress-bar-container">
-                <div class="mjjbox-progress-bar">
-                  <div class="mjjbox-progress-fill ${met ? '' : 'incomplete'}" style="width: ${item.percentage || 0}%"></div>
-                </div>
-                <span class="mjjbox-progress-required ${met ? '' : 'mjjbox-progress-undone'}">
-                  需要：${item.isBoolean ? item.required : need} ${icon}
-                </span>
-              </div>
-              <div class="mjjbox-progress-tooltip">
-                当前：<span class="${met ? 'mjjbox-progress-done' : 'mjjbox-progress-undone'}">
-                  ${item.isBoolean ? item.current : cur} ${icon}
-                </span>
-              </div>
-            </div>`;
-        }).join('')}
-        ${progress.items.length === 0 ? '<div style="text-align:center;padding:20px;color:#666;">🎉 恭喜！您已达到最高等级！</div>' : ''}
-        <div id="upgrade-suggestion" style="margin-top:16px;padding:12px;background:#f8f9fa;border-radius:6px;font-size:13px;color:#666;display:none;">
+    setTimeout(() => {
+      notification.style.opacity = '1';
+      notification.style.transform = 'translateX(0)';
+    }, 100);
+
+    setTimeout(() => {
+      notification.style.opacity = '0';
+      notification.style.transform = 'translateX(100%)';
+      setTimeout(() => notification.remove(), 300);
+    }, 3000);
+  };
+
+  const createLevelPanel = () => {
+    if (panel) return panel;
+
+    panel = document.createElement('div');
+    panel.className = 'mjjbox-level-panel';
+    panel.innerHTML = `
+      <div class="mjjbox-panel-header">
+        <span class="mjjbox-panel-title">📊 等级进度</span>
+        <div class="mjjbox-panel-controls">
+          <button class="mjjbox-btn mjjbox-btn-settings" title="个性化设置">⚙️</button>
+          <button class="mjjbox-btn mjjbox-btn-refresh" title="刷新数据">🔄</button>
+          <button class="mjjbox-btn mjjbox-btn-close" title="关闭面板">✕</button>
         </div>
+      </div>
+      <div class="mjjbox-panel-content">
+        <div class="mjjbox-loading">正在加载用户数据...</div>
       </div>
     `;
 
-    modal.appendChild(content);
-    setupModalEvents(modal);
+    // 添加样式
+    GM_addStyle(`
+      .mjjbox-level-panel {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        width: 320px;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+      }
 
-    // 异步检查隐藏条件（仅对LV2用户且有晋级需求时检查）
-    if (level === 2 && progress.items.length > 0) {
-      checkHiddenRequirements(username, content, progress, userData);
-    }
+      .mjjbox-panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        background: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+        border-radius: 8px 8px 0 0;
+      }
 
-    return modal;
+      .mjjbox-panel-title {
+        font-weight: 600;
+        color: #495057;
+      }
+
+      .mjjbox-panel-controls {
+        display: flex;
+        gap: 4px;
+      }
+
+      .mjjbox-btn {
+        background: none;
+        border: none;
+        padding: 4px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        transition: background-color 0.2s;
+      }
+
+      .mjjbox-btn:hover {
+        background: rgba(0,0,0,0.1);
+      }
+
+      .mjjbox-panel-content {
+        padding: 16px;
+        max-height: 400px;
+        overflow-y: auto;
+      }
+
+      .mjjbox-loading {
+        text-align: center;
+        color: #6c757d;
+        padding: 20px;
+      }
+
+      .mjjbox-level-info {
+        margin-bottom: 16px;
+        padding: 12px;
+        background: #e3f2fd;
+        border-radius: 6px;
+        border-left: 4px solid #2196f3;
+      }
+
+      .mjjbox-progress-item {
+        margin-bottom: 12px;
+        padding: 8px;
+        background: #f8f9fa;
+        border-radius: 4px;
+        border-left: 3px solid #28a745;
+      }
+
+      .mjjbox-progress-item.incomplete {
+        border-left-color: #ffc107;
+      }
+
+      .mjjbox-progress-item.hidden {
+        background: #fff3cd;
+        border-left-color: #ff6b6b;
+      }
+
+      .mjjbox-progress-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 4px;
+      }
+
+      .mjjbox-progress-name {
+        font-weight: 500;
+        color: #495057;
+      }
+
+      .mjjbox-progress-value {
+        font-size: 12px;
+        color: #6c757d;
+      }
+
+      .mjjbox-progress-bar {
+        height: 6px;
+        background: #e9ecef;
+        border-radius: 3px;
+        overflow: hidden;
+      }
+
+      .mjjbox-progress-fill {
+        height: 100%;
+        background: #28a745;
+        transition: width 0.3s ease;
+      }
+
+      .mjjbox-progress-item.incomplete .mjjbox-progress-fill {
+        background: #ffc107;
+      }
+
+      .mjjbox-progress-item.hidden .mjjbox-progress-fill {
+        background: #ff6b6b;
+      }
+
+      .mjjbox-data-source {
+        margin-top: 12px;
+        padding: 8px;
+        background: #d4edda;
+        border: 1px solid #c3e6cb;
+        border-radius: 4px;
+        font-size: 12px;
+        color: #155724;
+      }
+
+      .mjjbox-hidden-conditions {
+        margin-top: 12px;
+        padding: 8px;
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 4px;
+        font-size: 12px;
+        color: #856404;
+      }
+    `);
+
+    // 绑定事件
+    panel.querySelector('.mjjbox-btn-close').addEventListener('click', () => {
+      panel.remove();
+      panel = null;
+    });
+
+    panel.querySelector('.mjjbox-btn-refresh').addEventListener('click', () => {
+      fetchUserLevel();
+    });
+
+    panel.querySelector('.mjjbox-btn-settings').addEventListener('click', () => {
+      showSettingsModal();
+    });
+
+    document.body.appendChild(panel);
+    return panel;
   };
 
-  /* ========== 隐藏条件检查函数 ========== */
-  const checkHiddenRequirements = async (username, content, progress, userData) => {
-    try {
-      console.log('🔍 开始检查隐藏条件...');
+  const updateLevelPanel = (levelData) => {
+    if (!panel) return;
 
-      // 获取帖子阅读唯一日期数据
-      const postsReadUniqueDays = userData.userSummary?.posts_read_unique_days || 0;
-      const requiredDays = 50; // 要求50天
-      const isReadingDaysMet = postsReadUniqueDays >= requiredDays;
+    const content = panel.querySelector('.mjjbox-panel-content');
+    const { currentLevel, targetLevel, progress, canLevelUp } = levelData;
 
-      console.log('📊 隐藏条件检查结果:', {
-        postsReadUniqueDays,
-        requiredDays,
-        isReadingDaysMet
+    let html = `
+      <div class="mjjbox-level-info">
+        <div><strong>当前等级:</strong> TL${currentLevel}</div>
+        <div><strong>目标等级:</strong> TL${targetLevel}</div>
+        <div><strong>升级状态:</strong> ${canLevelUp ? '✅ 可以升级' : '⏳ 需要完成更多条件'}</div>
+      </div>
+    `;
+
+    if (progress.length > 0) {
+      html += '<div class="mjjbox-progress-list">';
+
+      progress.forEach(item => {
+        const className = `mjjbox-progress-item ${item.completed ? 'complete' : 'incomplete'} ${item.isHidden ? 'hidden' : ''}`;
+        html += `
+          <div class="${className}">
+            <div class="mjjbox-progress-header">
+              <span class="mjjbox-progress-name">${item.isHidden ? '🔒 ' : ''}${item.name}</span>
+              <span class="mjjbox-progress-value">${item.current}/${item.required}</span>
+            </div>
+            <div class="mjjbox-progress-bar">
+              <div class="mjjbox-progress-fill" style="width: ${item.percentage}%"></div>
+            </div>
+          </div>
+        `;
       });
 
-      // 显示隐藏条件检查结果
-      const hiddenRequirementsHtml = `
-          <div class="mjjbox-progress-item" style="border-left: 3px solid #ff6b6b; padding-left: 12px; background: #fff5f5;">
-            <span class="mjjbox-progress-label">🔍 帖子阅读：唯一日期（隐藏条件）</span>
-            <div class="mjjbox-progress-bar-container">
-              <div class="mjjbox-progress-bar">
-                <div class="mjjbox-progress-fill ${isReadingDaysMet ? '' : 'incomplete'}" style="width: ${Math.min(100, (postsReadUniqueDays / requiredDays) * 100)}%"></div>
-              </div>
-              <span class="mjjbox-progress-required ${isReadingDaysMet ? 'mjjbox-progress-done' : 'mjjbox-progress-undone'}">
-                需要：${requiredDays} 天 (50%) ${isReadingDaysMet ? '✅' : '❌'}
-              </span>
-            </div>
-            <div class="mjjbox-progress-tooltip">
-              当前：<span class="${isReadingDaysMet ? 'mjjbox-progress-done' : 'mjjbox-progress-undone'}">${postsReadUniqueDays} 天 (${Math.round((postsReadUniqueDays / 100) * 100)}%) ${isReadingDaysMet ? '✅' : '❌'}</span>
-            </div>
-          </div>`;
-
-      // 把隐藏条件HTML插到进度列表最前面
-      const section = content.querySelector('.mjjbox-progress-section');
-      const firstItem = section.querySelector('.mjjbox-progress-item');
-      if (firstItem) {
-        firstItem.insertAdjacentHTML('beforebegin', hiddenRequirementsHtml);
-      } else {
-        const h3 = section.querySelector('h3');
-        if (h3) {
-          h3.insertAdjacentHTML('afterend', hiddenRequirementsHtml);
-        }
-      }
-
-      // 生成升级建议（包含隐藏条件）
-      generateUpgradeSuggestion(content, progress, { postsReadUniqueDays, requiredDays, isReadingDaysMet });
-
-    } catch (e) {
-      console.error('❌ 隐藏条件检查异常:', e);
+      html += '</div>';
     }
+
+    // 添加数据来源说明
+    const hasOfficialData = progress.some(item => item.isHidden && item.current > 0);
+    if (hasOfficialData) {
+      html += `
+        <div class="mjjbox-data-source">
+          ✅ 使用官方数据
+        </div>
+      `;
+    }
+
+    // 添加隐藏条件说明
+    const hiddenItems = progress.filter(item => item.isHidden);
+    if (hiddenItems.length > 0) {
+      html += `
+        <div class="mjjbox-hidden-conditions">
+          🔒 <strong>隐藏条件说明:</strong><br>
+          ${hiddenItems.map(item => `• ${item.name}: ${item.current}/${item.required} (${item.percentage}%)`).join('<br>')}
+        </div>
+      `;
+    }
+
+    content.innerHTML = html;
   };
 
-  /* ========== 升级建议生成 ========== */
-  const generateUpgradeSuggestion = (content, progress, hiddenCondition = null) => {
-    const suggestionDiv = content.querySelector('#upgrade-suggestion');
-    if (!suggestionDiv) return;
+  const fetchUserLevel = async () => {
+    if (isLoading) return;
+    isLoading = true;
 
-    const allBasicMet = progress.achievedCount === progress.totalCount;
-    const allHiddenMet = hiddenCondition ? hiddenCondition.isReadingDaysMet : true;
-
-    let suggestion = '';
-    let bgColor = '#f8f9fa';
-    let textColor = '#666';
-
-    if (allBasicMet && allHiddenMet) {
-      // 所有条件都满足但仍未晋级
-      suggestion = `
-        <div style="color: #e53e3e; font-weight: 600; margin-bottom: 8px;">⚠️ 所有条件已满足，但仍无法晋级</div>
-        <div style="margin-bottom: 6px;"><strong>可能原因：</strong></div>
-        <div>• 管理员启用了「等级锁定」插件（Trust Level Locks）</div>
-        <div>• 系统未刷新等级状态，尝试重新登录或发帖触发</div>
-        <div>• 存在被隐藏的帖子影响了举报比例</div>
-        <div style="margin-top: 8px; color: #3182ce;"><strong>建议：</strong>私信管理员确认是否启用等级锁定</div>
-      `;
-      bgColor = '#fed7d7';
-      textColor = '#742a2a';
-    } else if (allBasicMet && !allHiddenMet) {
-      // 基础条件满足但隐藏条件不达标
-      suggestion = `
-        <div style="color: #d69e2e; font-weight: 600; margin-bottom: 8px;">🔍 发现隐藏条件问题</div>
-        <div style="margin-bottom: 6px;"><strong>问题：</strong></div>
-        <div>• 帖子阅读唯一日期：${hiddenCondition.postsReadUniqueDays}天/${hiddenCondition.requiredDays}天 (${Math.round((hiddenCondition.postsReadUniqueDays / hiddenCondition.requiredDays) * 100)}%)</div>
-        <div style="margin-top: 8px; color: #3182ce;"><strong>解决方案：</strong></div>
-        <div>• 需要在更多不同的天数里阅读帖子</div>
-        <div>• 建议每天至少阅读1-2个帖子，持续${hiddenCondition.requiredDays - hiddenCondition.postsReadUniqueDays}天</div>
-        <div>• 避免在同一天大量阅读，要分散到不同日期</div>
-      `;
-      bgColor = '#faf089';
-      textColor = '#744210';
-    } else {
-      // 基础条件未满足
-      const unmetItems = progress.items.filter(item => !item.isMet);
-      if (unmetItems.length > 0) {
-        // 检查是否有帖子阅读唯一日期问题
-        const readingDaysItem = unmetItems.find(item => item.label.includes('唯一日期'));
-
-        if (readingDaysItem) {
-          suggestion = `
-            <div style="color: #d69e2e; font-weight: 600; margin-bottom: 8px;">📅 发现帖子阅读分布问题</div>
-            <div style="margin-bottom: 6px;"><strong>问题：</strong></div>
-            <div>• 帖子阅读唯一日期：${readingDaysItem.current}天/${readingDaysItem.required}天 (${Math.round((readingDaysItem.current / readingDaysItem.required) * 100)}%)</div>
-            <div style="margin-top: 8px; color: #3182ce;"><strong>解决方案：</strong></div>
-            <div>• 需要在更多不同的天数里阅读帖子</div>
-            <div>• 建议每天至少阅读1-2个帖子，持续${readingDaysItem.required - readingDaysItem.current}天</div>
-            <div>• 避免在同一天大量阅读，要分散到不同日期</div>
-            ${unmetItems.length > 1 ? `<div style="margin-top: 8px;">• 还有其他 ${unmetItems.length - 1} 项条件需要完成</div>` : ''}
-          `;
-          bgColor = '#faf089';
-          textColor = '#744210';
-        } else {
-          suggestion = `
-            <div style="color: #3182ce; font-weight: 600; margin-bottom: 8px;">📋 还需完成以下基础条件</div>
-            ${unmetItems.slice(0, 3).map(item => {
-              const cur = item.isTime ? `${item.current} 分钟` :
-                         item.label.includes('唯一日期') ? `${item.current} 天` :
-                         item.current;
-              const need = item.isTime ? `${item.required} 分钟` :
-                          item.label.includes('唯一日期') ? `${item.required} 天` :
-                          item.required;
-              const diff = item.isTime ?
-                `还需 ${item.required - item.current} 分钟` :
-                item.label.includes('唯一日期') ?
-                `还需 ${item.required - item.current} 天` :
-                `还需 ${item.required - item.current}`;
-              return `<div>• ${item.label}：${cur}/${need} ${item.isBoolean ? '' : `(${diff})`}</div>`;
-            }).join('')}
-            ${unmetItems.length > 3 ? `<div>• 还有 ${unmetItems.length - 3} 项条件...</div>` : ''}
-          `;
-          bgColor = '#e6fffa';
-          textColor = '#234e52';
-        }
+    try {
+      const username = getCurrentUsername();
+      if (!username) {
+        throw new Error('无法获取当前用户名');
       }
-    }
 
-    if (suggestion) {
-      suggestionDiv.innerHTML = suggestion;
-      suggestionDiv.style.backgroundColor = bgColor;
-      suggestionDiv.style.color = textColor;
-      suggestionDiv.style.display = 'block';
+      console.log('🔍 获取用户等级数据:', username);
+
+      if (!panel) createLevelPanel();
+
+      const content = panel.querySelector('.mjjbox-panel-content');
+      content.innerHTML = '<div class="mjjbox-loading">正在加载用户数据...</div>';
+
+      const userData = await fetchUserData(username);
+      const levelData = calculateLevelProgress(userData);
+
+      updateLevelPanel(levelData);
+
+    } catch (error) {
+      console.error('❌ 获取用户等级失败:', error);
+      if (panel) {
+        const content = panel.querySelector('.mjjbox-panel-content');
+        content.innerHTML = `<div class="mjjbox-loading" style="color: #dc3545;">❌ ${error.message}</div>`;
+      }
+      showNotification(`获取数据失败: ${error.message}`, 'error');
+    } finally {
+      isLoading = false;
     }
   };
 
   /* ========== 设置面板 ========== */
-  const openSettingsModal = () => {
-    console.log('🔧 打开设置面板');
-    const modal = createSettingsModal();
-    document.body.appendChild(modal);
-    setTimeout(() => modal.classList.add('show'), 10);
-  };
+  const showSettingsModal = () => {
+    // 移除已存在的模态框
+    const existingModal = document.querySelector('.mjjbox-modal');
+    if (existingModal) {
+      existingModal.remove();
+    }
 
-  const createSettingsModal = () => {
     const modal = document.createElement('div');
     modal.className = 'mjjbox-modal';
-
-    const content = document.createElement('div');
-    content.className = 'mjjbox-modal-content mjjbox-settings-modal-content';
-    content.style.top = '50%';
-    content.style.left = '50%';
-    content.style.transform = 'translate(-50%, -50%)';
-
-    content.innerHTML = `
-      <button class="mjjbox-close-btn">&times;</button>
-      <div class="mjjbox-settings-header">
-        <h2 class="mjjbox-settings-title">MJJBOX 增强设置</h2>
-        <p class="mjjbox-settings-subtitle">自定义您的论坛外观和体验</p>
-      </div>
-
-      <div class="mjjbox-settings-tabs">
-        <button class="mjjbox-settings-tab active" data-tab="background">背景设置</button>
-        <button class="mjjbox-settings-tab" data-tab="font">字体设置</button>
-        <button class="mjjbox-settings-tab" data-tab="theme">主题设置</button>
-        <button class="mjjbox-settings-tab" data-tab="about">关于</button>
-      </div>
-
-      <div class="mjjbox-settings-content">
-        <!-- 背景设置面板 -->
-        <div class="mjjbox-settings-panel active" id="background-panel">
-          <div class="mjjbox-form-check">
-            <input type="checkbox" id="bg-enabled" ${currentConfig.background.enabled ? 'checked' : ''}>
-            <label for="bg-enabled">启用自定义背景</label>
-          </div>
-
-          <div class="mjjbox-form-group">
-            <label class="mjjbox-form-label">背景图片URL</label>
-            <input type="url" class="mjjbox-form-control" id="bg-url" value="${currentConfig.background.imageUrl}" placeholder="https://example.com/image.jpg">
-          </div>
-
-          <div class="mjjbox-form-group">
-            <label class="mjjbox-form-label">本地图片上传</label>
-            <div class="mjjbox-file-input-wrapper">
-              <input type="file" class="mjjbox-file-input" id="bg-file" accept="image/*">
-              <label for="bg-file" class="mjjbox-file-input-label">📁 选择本地图片</label>
-            </div>
-          </div>
-
-          <div class="mjjbox-form-row">
-            <div class="mjjbox-form-col">
-              <label class="mjjbox-form-label">显示模式</label>
-              <select class="mjjbox-form-control" id="bg-mode">
-                <option value="cover" ${currentConfig.background.mode === 'cover' ? 'selected' : ''}>覆盖</option>
-                <option value="contain" ${currentConfig.background.mode === 'contain' ? 'selected' : ''}>包含</option>
-                <option value="repeat" ${currentConfig.background.mode === 'repeat' ? 'selected' : ''}>平铺</option>
-                <option value="no-repeat" ${currentConfig.background.mode === 'no-repeat' ? 'selected' : ''}>不重复</option>
-              </select>
-            </div>
-            <div class="mjjbox-form-col">
-              <label class="mjjbox-form-label">透明度 (${currentConfig.background.opacity})</label>
-              <input type="range" class="mjjbox-form-control" id="bg-opacity" min="0" max="1" step="0.1" value="${currentConfig.background.opacity}">
-            </div>
-          </div>
-
-          <div class="mjjbox-form-row">
-            <div class="mjjbox-form-col">
-              <label class="mjjbox-form-label">模糊程度 (${currentConfig.background.blur}px)</label>
-              <input type="range" class="mjjbox-form-control" id="bg-blur" min="0" max="20" step="1" value="${currentConfig.background.blur}">
-            </div>
-            <div class="mjjbox-form-col">
-              <label class="mjjbox-form-label">遮罩透明度 (${currentConfig.background.overlayOpacity})</label>
-              <input type="range" class="mjjbox-form-control" id="bg-overlay-opacity" min="0" max="1" step="0.1" value="${currentConfig.background.overlayOpacity}">
-            </div>
-          </div>
-
-          <div class="mjjbox-form-group">
-            <label class="mjjbox-form-label">遮罩颜色</label>
-            <input type="color" class="mjjbox-form-control" id="bg-overlay-color" value="${currentConfig.background.overlayColor}">
-            <span class="mjjbox-color-preview" style="background-color: ${currentConfig.background.overlayColor}"></span>
-          </div>
+    modal.innerHTML = `
+      <div class="mjjbox-modal-backdrop"></div>
+      <div class="mjjbox-modal-content">
+        <div class="mjjbox-modal-header">
+          <h3>🎨 个性化设置</h3>
+          <button class="mjjbox-modal-close">✕</button>
         </div>
-
-        <!-- 字体设置面板 -->
-        <div class="mjjbox-settings-panel" id="font-panel">
-          <div class="mjjbox-form-check">
-            <input type="checkbox" id="font-enabled" ${currentConfig.font.enabled ? 'checked' : ''}>
-            <label for="font-enabled">启用自定义字体</label>
+        <div class="mjjbox-modal-body">
+          <div class="mjjbox-settings-tabs">
+            <button class="mjjbox-settings-tab active" data-tab="background">背景设置</button>
+            <button class="mjjbox-settings-tab" data-tab="font">字体设置</button>
+            <button class="mjjbox-settings-tab" data-tab="theme">主题设置</button>
           </div>
 
-          <div class="mjjbox-form-group">
-            <label class="mjjbox-form-label">字体族</label>
-            <select class="mjjbox-form-control" id="font-family">
-              <option value="inherit" ${currentConfig.font.family === 'inherit' ? 'selected' : ''}>默认</option>
-              <option value="'Microsoft YaHei', sans-serif" ${currentConfig.font.family === "'Microsoft YaHei', sans-serif" ? 'selected' : ''}>微软雅黑</option>
-              <option value="'PingFang SC', sans-serif" ${currentConfig.font.family === "'PingFang SC', sans-serif" ? 'selected' : ''}>苹方</option>
-              <option value="'Source Han Sans', sans-serif" ${currentConfig.font.family === "'Source Han Sans', sans-serif" ? 'selected' : ''}>思源黑体</option>
-              <option value="'Noto Sans CJK SC', sans-serif" ${currentConfig.font.family === "'Noto Sans CJK SC', sans-serif" ? 'selected' : ''}>Noto Sans</option>
-              <option value="'DouyinSans', 'Microsoft YaHei', sans-serif" ${currentConfig.font.family === "'DouyinSans', 'Microsoft YaHei', sans-serif" ? 'selected' : ''}>抖音美好体</option>
-              <option value="Georgia, serif" ${currentConfig.font.family === 'Georgia, serif' ? 'selected' : ''}>Georgia</option>
-              <option value="'Times New Roman', serif" ${currentConfig.font.family === "'Times New Roman', serif" ? 'selected' : ''}>Times New Roman</option>
-              <option value="'Courier New', monospace" ${currentConfig.font.family === "'Courier New', monospace" ? 'selected' : ''}>Courier New</option>
-            </select>
-          </div>
+          <div class="mjjbox-settings-content">
+            <!-- 背景设置面板 -->
+            <div class="mjjbox-settings-panel active" id="background-panel">
+              <div class="mjjbox-form-group">
+                <label class="mjjbox-checkbox">
+                  <input type="checkbox" id="bg-enabled" ${currentConfig.background.enabled ? 'checked' : ''}>
+                  <span>启用自定义背景</span>
+                </label>
+              </div>
 
-          <div class="mjjbox-form-row">
-            <div class="mjjbox-form-col">
-              <label class="mjjbox-form-label">字体大小</label>
-              <select class="mjjbox-form-control" id="font-size">
-                <option value="inherit" ${currentConfig.font.size === 'inherit' ? 'selected' : ''}>默认</option>
-                <option value="12px" ${currentConfig.font.size === '12px' ? 'selected' : ''}>12px</option>
-                <option value="14px" ${currentConfig.font.size === '14px' ? 'selected' : ''}>14px</option>
-                <option value="16px" ${currentConfig.font.size === '16px' ? 'selected' : ''}>16px</option>
-                <option value="18px" ${currentConfig.font.size === '18px' ? 'selected' : ''}>18px</option>
-                <option value="20px" ${currentConfig.font.size === '20px' ? 'selected' : ''}>20px</option>
-              </select>
-            </div>
-            <div class="mjjbox-form-col">
-              <label class="mjjbox-form-label">字体粗细</label>
-              <select class="mjjbox-form-control" id="font-weight">
-                <option value="inherit" ${currentConfig.font.weight === 'inherit' ? 'selected' : ''}>默认</option>
-                <option value="300" ${currentConfig.font.weight === '300' ? 'selected' : ''}>细体</option>
-                <option value="400" ${currentConfig.font.weight === '400' ? 'selected' : ''}>正常</option>
-                <option value="500" ${currentConfig.font.weight === '500' ? 'selected' : ''}>中等</option>
-                <option value="600" ${currentConfig.font.weight === '600' ? 'selected' : ''}>半粗</option>
-                <option value="700" ${currentConfig.font.weight === '700' ? 'selected' : ''}>粗体</option>
-              </select>
-            </div>
-          </div>
+              <div class="mjjbox-form-group">
+                <label class="mjjbox-form-label">背景图片URL</label>
+                <input type="text" class="mjjbox-form-control" id="bg-url" value="${currentConfig.background.imageUrl}" placeholder="输入图片URL或上传文件">
+                <input type="file" id="bg-file" accept="image/*" style="margin-top: 8px;">
+              </div>
 
-          <div class="mjjbox-form-row">
-            <div class="mjjbox-form-col">
-              <label class="mjjbox-form-label">字体颜色</label>
-              <input type="color" class="mjjbox-form-control" id="font-color" value="${currentConfig.font.color === 'inherit' ? '#333333' : currentConfig.font.color}">
-              <span class="mjjbox-color-preview" style="background-color: ${currentConfig.font.color === 'inherit' ? '#333333' : currentConfig.font.color}"></span>
+              <div class="mjjbox-form-group">
+                <label class="mjjbox-form-label">显示模式</label>
+                <select class="mjjbox-form-control" id="bg-mode">
+                  <option value="cover" ${currentConfig.background.mode === 'cover' ? 'selected' : ''}>覆盖</option>
+                  <option value="contain" ${currentConfig.background.mode === 'contain' ? 'selected' : ''}>包含</option>
+                  <option value="repeat" ${currentConfig.background.mode === 'repeat' ? 'selected' : ''}>重复</option>
+                </select>
+              </div>
+
+              <div class="mjjbox-form-group">
+                <label class="mjjbox-form-label">透明度: <span id="opacity-value">${currentConfig.background.opacity}</span></label>
+                <input type="range" class="mjjbox-form-control" id="bg-opacity" min="0" max="1" step="0.1" value="${currentConfig.background.opacity}">
+              </div>
+
+              <div class="mjjbox-form-group">
+                <label class="mjjbox-form-label">模糊度: <span id="blur-value">${currentConfig.background.blur}px</span></label>
+                <input type="range" class="mjjbox-form-control" id="bg-blur" min="0" max="20" value="${currentConfig.background.blur}">
+              </div>
             </div>
-            <div class="mjjbox-form-col">
-              <label class="mjjbox-form-label">行高</label>
-              <select class="mjjbox-form-control" id="font-line-height">
-                <option value="inherit" ${currentConfig.font.lineHeight === 'inherit' ? 'selected' : ''}>默认</option>
-                <option value="1.2" ${currentConfig.font.lineHeight === '1.2' ? 'selected' : ''}>1.2</option>
-                <option value="1.4" ${currentConfig.font.lineHeight === '1.4' ? 'selected' : ''}>1.4</option>
-                <option value="1.6" ${currentConfig.font.lineHeight === '1.6' ? 'selected' : ''}>1.6</option>
-                <option value="1.8" ${currentConfig.font.lineHeight === '1.8' ? 'selected' : ''}>1.8</option>
-                <option value="2.0" ${currentConfig.font.lineHeight === '2.0' ? 'selected' : ''}>2.0</option>
-              </select>
+
+            <!-- 字体设置面板 -->
+            <div class="mjjbox-settings-panel" id="font-panel">
+              <div class="mjjbox-form-group">
+                <label class="mjjbox-checkbox">
+                  <input type="checkbox" id="font-enabled" ${currentConfig.font.enabled ? 'checked' : ''}>
+                  <span>启用自定义字体</span>
+                </label>
+              </div>
+
+              <div class="mjjbox-form-group">
+                <label class="mjjbox-form-label">字体族</label>
+                <select class="mjjbox-form-control" id="font-family">
+                  <option value="inherit" ${currentConfig.font.family === 'inherit' ? 'selected' : ''}>默认</option>
+                  <option value="'Microsoft YaHei', sans-serif" ${currentConfig.font.family === "'Microsoft YaHei', sans-serif" ? 'selected' : ''}>微软雅黑</option>
+                  <option value="'PingFang SC', sans-serif" ${currentConfig.font.family === "'PingFang SC', sans-serif" ? 'selected' : ''}>苹方</option>
+                  <option value="'Source Han Sans', sans-serif" ${currentConfig.font.family === "'Source Han Sans', sans-serif" ? 'selected' : ''}>思源黑体</option>
+                  <option value="'Noto Sans CJK SC', sans-serif" ${currentConfig.font.family === "'Noto Sans CJK SC', sans-serif" ? 'selected' : ''}>Noto Sans</option>
+                  <option value="'DouyinSans', 'Microsoft YaHei', sans-serif" ${currentConfig.font.family === "'DouyinSans', 'Microsoft YaHei', sans-serif" ? 'selected' : ''}>抖音美好体</option>
+                  <option value="Georgia, serif" ${currentConfig.font.family === 'Georgia, serif' ? 'selected' : ''}>Georgia</option>
+                  <option value="'Times New Roman', serif" ${currentConfig.font.family === "'Times New Roman', serif" ? 'selected' : ''}>Times New Roman</option>
+                  <option value="'Courier New', monospace" ${currentConfig.font.family === "'Courier New', monospace" ? 'selected' : ''}>Courier New</option>
+                </select>
+              </div>
+
+              <div class="mjjbox-form-group">
+                <label class="mjjbox-form-label">字体大小</label>
+                <select class="mjjbox-form-control" id="font-size">
+                  <option value="inherit" ${currentConfig.font.size === 'inherit' ? 'selected' : ''}>默认</option>
+                  <option value="12px" ${currentConfig.font.size === '12px' ? 'selected' : ''}>12px</option>
+                  <option value="14px" ${currentConfig.font.size === '14px' ? 'selected' : ''}>14px</option>
+                  <option value="16px" ${currentConfig.font.size === '16px' ? 'selected' : ''}>16px</option>
+                  <option value="18px" ${currentConfig.font.size === '18px' ? 'selected' : ''}>18px</option>
+                  <option value="20px" ${currentConfig.font.size === '20px' ? 'selected' : ''}>20px</option>
+                </select>
+              </div>
+
+              <div class="mjjbox-form-group">
+                <label class="mjjbox-form-label">字体粗细</label>
+                <select class="mjjbox-form-control" id="font-weight">
+                  <option value="inherit" ${currentConfig.font.weight === 'inherit' ? 'selected' : ''}>默认</option>
+                  <option value="300" ${currentConfig.font.weight === '300' ? 'selected' : ''}>细体</option>
+                  <option value="400" ${currentConfig.font.weight === '400' ? 'selected' : ''}>正常</option>
+                  <option value="500" ${currentConfig.font.weight === '500' ? 'selected' : ''}>中等</option>
+                  <option value="600" ${currentConfig.font.weight === '600' ? 'selected' : ''}>半粗</option>
+                  <option value="700" ${currentConfig.font.weight === '700' ? 'selected' : ''}>粗体</option>
+                </select>
+              </div>
+
+              <div class="mjjbox-form-group">
+                <label class="mjjbox-form-label">字体颜色</label>
+                <input type="color" class="mjjbox-form-control" id="font-color" value="${currentConfig.font.color !== 'inherit' ? currentConfig.font.color : '#333333'}">
+              </div>
+            </div>
+
+            <!-- 主题设置面板 -->
+            <div class="mjjbox-settings-panel" id="theme-panel">
+              <div class="mjjbox-form-group">
+                <label class="mjjbox-checkbox">
+                  <input type="checkbox" id="theme-enabled" ${currentConfig.theme.enabled ? 'checked' : ''}>
+                  <span>启用自定义主题</span>
+                </label>
+              </div>
+
+              <div class="mjjbox-form-group">
+                <label class="mjjbox-form-label">主色调</label>
+                <input type="color" class="mjjbox-form-control" id="theme-primary" value="${currentConfig.theme.primaryColor}">
+              </div>
+
+              <div class="mjjbox-form-group">
+                <label class="mjjbox-form-label">辅助色</label>
+                <input type="color" class="mjjbox-form-control" id="theme-secondary" value="${currentConfig.theme.secondaryColor}">
+              </div>
+
+              <div class="mjjbox-form-group">
+                <label class="mjjbox-form-label">强调色</label>
+                <input type="color" class="mjjbox-form-control" id="theme-accent" value="${currentConfig.theme.accentColor}">
+              </div>
+
+              <div class="mjjbox-form-group">
+                <label class="mjjbox-form-label">圆角大小</label>
+                <select class="mjjbox-form-control" id="theme-radius">
+                  <option value="0px" ${currentConfig.theme.borderRadius === '0px' ? 'selected' : ''}>无圆角</option>
+                  <option value="4px" ${currentConfig.theme.borderRadius === '4px' ? 'selected' : ''}>小圆角</option>
+                  <option value="8px" ${currentConfig.theme.borderRadius === '8px' ? 'selected' : ''}>中圆角</option>
+                  <option value="12px" ${currentConfig.theme.borderRadius === '12px' ? 'selected' : ''}>大圆角</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
-
-        <!-- 主题设置面板 -->
-        <div class="mjjbox-settings-panel" id="theme-panel">
-          <div class="mjjbox-form-check">
-            <input type="checkbox" id="theme-enabled" ${currentConfig.theme.enabled ? 'checked' : ''}>
-            <label for="theme-enabled">启用自定义主题</label>
-          </div>
-
-          <div class="mjjbox-form-row">
-            <div class="mjjbox-form-col">
-              <label class="mjjbox-form-label">主色调</label>
-              <input type="color" class="mjjbox-form-control" id="theme-primary" value="${currentConfig.theme.primaryColor}">
-              <span class="mjjbox-color-preview" style="background-color: ${currentConfig.theme.primaryColor}"></span>
-            </div>
-            <div class="mjjbox-form-col">
-              <label class="mjjbox-form-label">次要色</label>
-              <input type="color" class="mjjbox-form-control" id="theme-secondary" value="${currentConfig.theme.secondaryColor}">
-              <span class="mjjbox-color-preview" style="background-color: ${currentConfig.theme.secondaryColor}"></span>
-            </div>
-          </div>
-
-          <div class="mjjbox-form-row">
-            <div class="mjjbox-form-col">
-              <label class="mjjbox-form-label">强调色</label>
-              <input type="color" class="mjjbox-form-control" id="theme-accent" value="${currentConfig.theme.accentColor}">
-              <span class="mjjbox-color-preview" style="background-color: ${currentConfig.theme.accentColor}"></span>
-            </div>
-            <div class="mjjbox-form-col">
-              <label class="mjjbox-form-label">圆角大小</label>
-              <select class="mjjbox-form-control" id="theme-radius">
-                <option value="0px" ${currentConfig.theme.borderRadius === '0px' ? 'selected' : ''}>无圆角</option>
-                <option value="4px" ${currentConfig.theme.borderRadius === '4px' ? 'selected' : ''}>小圆角</option>
-                <option value="8px" ${currentConfig.theme.borderRadius === '8px' ? 'selected' : ''}>中圆角</option>
-                <option value="12px" ${currentConfig.theme.borderRadius === '12px' ? 'selected' : ''}>大圆角</option>
-                <option value="20px" ${currentConfig.theme.borderRadius === '20px' ? 'selected' : ''}>超大圆角</option>
-              </select>
-            </div>
-          </div>
+        <div class="mjjbox-modal-footer">
+          <button class="mjjbox-btn mjjbox-btn-secondary" id="preview-btn">预览</button>
+          <button class="mjjbox-btn mjjbox-btn-secondary" id="reset-btn">重置</button>
+          <button class="mjjbox-btn mjjbox-btn-primary" id="save-btn">保存</button>
         </div>
-
-        <!-- 关于面板 -->
-        <div class="mjjbox-settings-panel" id="about-panel">
-          <div style="text-align: center; padding: 20px;">
-            <h3 style="color: #333; margin-bottom: 16px;">MJJBOX 增强助手 v3.3</h3>
-            <p style="color: #666; margin-bottom: 20px;">整合等级查看器与自定义美化功能</p>
-
-            <div style="background: #f8f9fa; padding: 16px; border-radius: 8px; margin-bottom: 20px; text-align: left;">
-              <h4 style="color: #333; margin-bottom: 12px;">功能特性：</h4>
-              <ul style="color: #666; margin: 0; padding-left: 20px;">
-                <li>🎯 等级进度查看器（2024年9月15日新规则）</li>
-                <li>🖼️ 自定义背景图片</li>
-                <li>✏️ 字体样式自定义</li>
-                <li>🎨 主题色彩调整</li>
-                <li>💾 配置自动保存</li>
-                <li>📱 响应式设计</li>
-              </ul>
-            </div>
-
-            <div style="background: #e3f2fd; padding: 12px; border-radius: 6px; color: #1565c0; font-size: 14px;">
-              💡 提示：所有设置会自动保存到Tampermonkey存储
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="mjjbox-settings-actions">
-        <button class="mjjbox-btn mjjbox-btn-danger" id="reset-btn">重置设置</button>
-        <button class="mjjbox-btn mjjbox-btn-secondary" id="preview-btn">预览效果</button>
-        <button class="mjjbox-btn mjjbox-btn-primary" id="save-btn">保存设置</button>
       </div>
     `;
 
-    modal.appendChild(content);
+    // 添加模态框样式
+    GM_addStyle(`
+      .mjjbox-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 10001;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+
+      .mjjbox-modal.show {
+        opacity: 1;
+      }
+
+      .mjjbox-modal-backdrop {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+      }
+
+      .mjjbox-modal-content {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 90%;
+        max-width: 600px;
+        max-height: 80vh;
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .mjjbox-modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 20px;
+        background: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+      }
+
+      .mjjbox-modal-header h3 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+        color: #495057;
+      }
+
+      .mjjbox-modal-close {
+        background: none;
+        border: none;
+        font-size: 18px;
+        cursor: pointer;
+        padding: 4px;
+        color: #6c757d;
+      }
+
+      .mjjbox-modal-close:hover {
+        color: #495057;
+      }
+
+      .mjjbox-modal-body {
+        padding: 0;
+        max-height: 60vh;
+        overflow-y: auto;
+      }
+
+      .mjjbox-settings-tabs {
+        display: flex;
+        background: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+      }
+
+      .mjjbox-settings-tab {
+        flex: 1;
+        padding: 12px 16px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 14px;
+        color: #6c757d;
+        transition: all 0.2s;
+      }
+
+      .mjjbox-settings-tab.active {
+        background: white;
+        color: #495057;
+        font-weight: 500;
+      }
+
+      .mjjbox-settings-tab:hover {
+        background: #e9ecef;
+      }
+
+      .mjjbox-settings-content {
+        padding: 20px;
+      }
+
+      .mjjbox-settings-panel {
+        display: none;
+      }
+
+      .mjjbox-settings-panel.active {
+        display: block;
+      }
+
+      .mjjbox-form-group {
+        margin-bottom: 16px;
+      }
+
+      .mjjbox-form-label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 500;
+        color: #495057;
+      }
+
+      .mjjbox-form-control {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        font-size: 14px;
+        transition: border-color 0.2s;
+      }
+
+      .mjjbox-form-control:focus {
+        outline: none;
+        border-color: #007bff;
+        box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+      }
+
+      .mjjbox-checkbox {
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+        font-weight: normal;
+      }
+
+      .mjjbox-checkbox input {
+        margin-right: 8px;
+        width: auto;
+      }
+
+      .mjjbox-modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 16px 20px;
+        background: #f8f9fa;
+        border-top: 1px solid #dee2e6;
+      }
+
+      .mjjbox-btn {
+        padding: 8px 16px;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.2s;
+      }
+
+      .mjjbox-btn-primary {
+        background: #007bff;
+        color: white;
+        border-color: #007bff;
+      }
+
+      .mjjbox-btn-primary:hover {
+        background: #0056b3;
+        border-color: #0056b3;
+      }
+
+      .mjjbox-btn-secondary {
+        background: #6c757d;
+        color: white;
+        border-color: #6c757d;
+      }
+
+      .mjjbox-btn-secondary:hover {
+        background: #545b62;
+        border-color: #545b62;
+      }
+    `);
+
+    document.body.appendChild(modal);
+
+    // 显示模态框
+    setTimeout(() => modal.classList.add('show'), 10);
+
+    // 绑定事件
     setupModalEvents(modal);
-    setupSettingsEvents(content);
-    return modal;
   };
 
-  /* ========== 设置面板事件处理 ========== */
-  const setupSettingsEvents = (content) => {
-    console.log('🔧 设置事件绑定');
+  const setupModalEvents = (modal) => {
+    // 关闭模态框
+    const closeModal = () => {
+      modal.classList.remove('show');
+      setTimeout(() => modal.remove(), 300);
+    };
+
+    modal.querySelector('.mjjbox-modal-close').addEventListener('click', closeModal);
+    modal.querySelector('.mjjbox-modal-backdrop').addEventListener('click', closeModal);
 
     // 标签页切换
-    const tabs = content.querySelectorAll('.mjjbox-settings-tab');
-    const panels = content.querySelectorAll('.mjjbox-settings-panel');
+    const tabs = modal.querySelectorAll('.mjjbox-settings-tab');
+    const panels = modal.querySelectorAll('.mjjbox-settings-panel');
 
     tabs.forEach(tab => {
       tab.addEventListener('click', () => {
-        console.log('切换标签页:', tab.dataset.tab);
+        const targetTab = tab.dataset.tab;
+
         tabs.forEach(t => t.classList.remove('active'));
         panels.forEach(p => p.classList.remove('active'));
 
         tab.classList.add('active');
-        const targetPanel = content.querySelector(`#${tab.dataset.tab}-panel`);
-        if (targetPanel) targetPanel.classList.add('active');
+        modal.querySelector(`#${targetTab}-panel`).classList.add('active');
       });
     });
 
-    // 文件上传处理
-    const fileInput = content.querySelector('#bg-file');
+    // 实时更新显示值
+    const opacitySlider = modal.querySelector('#bg-opacity');
+    const opacityValue = modal.querySelector('#opacity-value');
+    if (opacitySlider && opacityValue) {
+      opacitySlider.addEventListener('input', (e) => {
+        opacityValue.textContent = e.target.value;
+      });
+    }
+
+    const blurSlider = modal.querySelector('#bg-blur');
+    const blurValue = modal.querySelector('#blur-value');
+    if (blurSlider && blurValue) {
+      blurSlider.addEventListener('input', (e) => {
+        blurValue.textContent = e.target.value + 'px';
+      });
+    }
+
+    // 文件上传
+    const fileInput = modal.querySelector('#bg-file');
     if (fileInput) {
       fileInput.addEventListener('change', handleFileUpload);
     }
 
-    // 颜色预览更新
-    const colorInputs = content.querySelectorAll('input[type="color"]');
-    colorInputs.forEach(input => {
-      input.addEventListener('input', (e) => {
-        const preview = e.target.nextElementSibling;
-        if (preview && preview.classList.contains('mjjbox-color-preview')) {
-          preview.style.backgroundColor = e.target.value;
-        }
-      });
-    });
-
-    // 滑块值显示更新
-    const rangeInputs = content.querySelectorAll('input[type="range"]');
-    rangeInputs.forEach(input => {
-      input.addEventListener('input', (e) => {
-        const label = e.target.previousElementSibling;
-        if (label) {
-          const baseText = label.textContent.split(' (')[0];
-          const unit = e.target.id.includes('opacity') ? '' : (e.target.id.includes('blur') ? 'px' : '');
-          label.textContent = `${baseText} (${e.target.value}${unit})`;
-        }
-      });
-    });
-
-    // 按钮事件绑定
-    const saveBtn = content.querySelector('#save-btn');
-    const resetBtn = content.querySelector('#reset-btn');
-    const previewBtn = content.querySelector('#preview-btn');
+    // 按钮事件
+    const saveBtn = modal.querySelector('#save-btn');
+    const resetBtn = modal.querySelector('#reset-btn');
+    const previewBtn = modal.querySelector('#preview-btn');
 
     if (saveBtn) {
       saveBtn.addEventListener('click', () => {
-        console.log('🔧 点击保存按钮');
-        saveSettings();
+        saveSettings(modal);
+        closeModal();
       });
     }
 
     if (resetBtn) {
       resetBtn.addEventListener('click', () => {
-        console.log('🔧 点击重置按钮');
-        resetSettings();
+        resetSettings(modal);
       });
     }
 
     if (previewBtn) {
       previewBtn.addEventListener('click', () => {
-        console.log('🔧 点击预览按钮');
-        previewChanges();
+        previewChanges(modal);
       });
     }
   };
@@ -1400,36 +1437,31 @@
     reader.readAsDataURL(file);
   };
 
-  const previewChanges = () => {
+  const previewChanges = (modal) => {
     console.log('👀 开始预览更改');
 
     // 收集当前设置
     const tempConfig = { ...currentConfig };
 
     // 背景设置
-    const bgEnabled = document.querySelector('#bg-enabled');
-    const bgUrl = document.querySelector('#bg-url');
-    const bgMode = document.querySelector('#bg-mode');
-    const bgOpacity = document.querySelector('#bg-opacity');
-    const bgBlur = document.querySelector('#bg-blur');
-    const bgOverlayOpacity = document.querySelector('#bg-overlay-opacity');
-    const bgOverlayColor = document.querySelector('#bg-overlay-color');
+    const bgEnabled = modal.querySelector('#bg-enabled');
+    const bgUrl = modal.querySelector('#bg-url');
+    const bgMode = modal.querySelector('#bg-mode');
+    const bgOpacity = modal.querySelector('#bg-opacity');
+    const bgBlur = modal.querySelector('#bg-blur');
 
     if (bgEnabled) tempConfig.background.enabled = bgEnabled.checked;
     if (bgUrl) tempConfig.background.imageUrl = bgUrl.value;
     if (bgMode) tempConfig.background.mode = bgMode.value;
     if (bgOpacity) tempConfig.background.opacity = parseFloat(bgOpacity.value);
     if (bgBlur) tempConfig.background.blur = parseInt(bgBlur.value);
-    if (bgOverlayOpacity) tempConfig.background.overlayOpacity = parseFloat(bgOverlayOpacity.value);
-    if (bgOverlayColor) tempConfig.background.overlayColor = bgOverlayColor.value;
 
     // 字体设置
-    const fontEnabled = document.querySelector('#font-enabled');
-    const fontFamily = document.querySelector('#font-family');
-    const fontSize = document.querySelector('#font-size');
-    const fontWeight = document.querySelector('#font-weight');
-    const fontColor = document.querySelector('#font-color');
-    const fontLineHeight = document.querySelector('#font-line-height');
+    const fontEnabled = modal.querySelector('#font-enabled');
+    const fontFamily = modal.querySelector('#font-family');
+    const fontSize = modal.querySelector('#font-size');
+    const fontWeight = modal.querySelector('#font-weight');
+    const fontColor = modal.querySelector('#font-color');
 
     if (fontEnabled) tempConfig.font.enabled = fontEnabled.checked;
     if (fontFamily) tempConfig.font.family = fontFamily.value;
@@ -1439,14 +1471,13 @@
       const colorValue = fontColor.value;
       tempConfig.font.color = (colorValue && colorValue !== '#333333') ? colorValue : 'inherit';
     }
-    if (fontLineHeight) tempConfig.font.lineHeight = fontLineHeight.value;
 
     // 主题设置
-    const themeEnabled = document.querySelector('#theme-enabled');
-    const themePrimary = document.querySelector('#theme-primary');
-    const themeSecondary = document.querySelector('#theme-secondary');
-    const themeAccent = document.querySelector('#theme-accent');
-    const themeRadius = document.querySelector('#theme-radius');
+    const themeEnabled = modal.querySelector('#theme-enabled');
+    const themePrimary = modal.querySelector('#theme-primary');
+    const themeSecondary = modal.querySelector('#theme-secondary');
+    const themeAccent = modal.querySelector('#theme-accent');
+    const themeRadius = modal.querySelector('#theme-radius');
 
     if (themeEnabled) tempConfig.theme.enabled = themeEnabled.checked;
     if (themePrimary) tempConfig.theme.primaryColor = themePrimary.value;
@@ -1463,30 +1494,27 @@
     showNotification('👀 预览效果已应用（临时）', 'info');
   };
 
-  const saveSettings = () => {
+  const saveSettings = (modal) => {
     console.log('💾 开始保存设置');
 
     // 收集所有设置
-    const bgEnabled = document.querySelector('#bg-enabled');
-    const bgUrl = document.querySelector('#bg-url');
-    const bgMode = document.querySelector('#bg-mode');
-    const bgOpacity = document.querySelector('#bg-opacity');
-    const bgBlur = document.querySelector('#bg-blur');
-    const bgOverlayOpacity = document.querySelector('#bg-overlay-opacity');
-    const bgOverlayColor = document.querySelector('#bg-overlay-color');
+    const bgEnabled = modal.querySelector('#bg-enabled');
+    const bgUrl = modal.querySelector('#bg-url');
+    const bgMode = modal.querySelector('#bg-mode');
+    const bgOpacity = modal.querySelector('#bg-opacity');
+    const bgBlur = modal.querySelector('#bg-blur');
 
-    const fontEnabled = document.querySelector('#font-enabled');
-    const fontFamily = document.querySelector('#font-family');
-    const fontSize = document.querySelector('#font-size');
-    const fontWeight = document.querySelector('#font-weight');
-    const fontColor = document.querySelector('#font-color');
-    const fontLineHeight = document.querySelector('#font-line-height');
+    const fontEnabled = modal.querySelector('#font-enabled');
+    const fontFamily = modal.querySelector('#font-family');
+    const fontSize = modal.querySelector('#font-size');
+    const fontWeight = modal.querySelector('#font-weight');
+    const fontColor = modal.querySelector('#font-color');
 
-    const themeEnabled = document.querySelector('#theme-enabled');
-    const themePrimary = document.querySelector('#theme-primary');
-    const themeSecondary = document.querySelector('#theme-secondary');
-    const themeAccent = document.querySelector('#theme-accent');
-    const themeRadius = document.querySelector('#theme-radius');
+    const themeEnabled = modal.querySelector('#theme-enabled');
+    const themePrimary = modal.querySelector('#theme-primary');
+    const themeSecondary = modal.querySelector('#theme-secondary');
+    const themeAccent = modal.querySelector('#theme-accent');
+    const themeRadius = modal.querySelector('#theme-radius');
 
     // 更新配置对象
     if (bgEnabled) currentConfig.background.enabled = bgEnabled.checked;
@@ -1494,8 +1522,6 @@
     if (bgMode) currentConfig.background.mode = bgMode.value;
     if (bgOpacity) currentConfig.background.opacity = parseFloat(bgOpacity.value);
     if (bgBlur) currentConfig.background.blur = parseInt(bgBlur.value);
-    if (bgOverlayOpacity) currentConfig.background.overlayOpacity = parseFloat(bgOverlayOpacity.value);
-    if (bgOverlayColor) currentConfig.background.overlayColor = bgOverlayColor.value;
 
     if (fontEnabled) currentConfig.font.enabled = fontEnabled.checked;
     if (fontFamily) currentConfig.font.family = fontFamily.value;
@@ -1505,7 +1531,6 @@
       const colorValue = fontColor.value;
       currentConfig.font.color = (colorValue && colorValue !== '#333333') ? colorValue : 'inherit';
     }
-    if (fontLineHeight) currentConfig.font.lineHeight = fontLineHeight.value;
 
     if (themeEnabled) currentConfig.theme.enabled = themeEnabled.checked;
     if (themePrimary) currentConfig.theme.primaryColor = themePrimary.value;
@@ -1522,106 +1547,105 @@
     // 立即应用样式
     applyCustomStyles();
 
-    // 关闭模态框
-    const modal = document.querySelector('.mjjbox-modal.show');
-    if (modal) {
-      modal.classList.remove('show');
-      setTimeout(() => modal.remove(), 300);
-    }
-
     showNotification('✅ 设置已保存并应用', 'success');
   };
 
-  const resetSettings = () => {
+  const resetSettings = (modal) => {
     console.log('🔄 开始重置设置');
 
-    if (confirm('确定要重置所有设置吗？此操作不可撤销。')) {
-      // 重置配置对象
-      currentConfig = JSON.parse(JSON.stringify(defaultConfig));
+    // 重置配置
+    currentConfig = JSON.parse(JSON.stringify(defaultConfig));
 
-      // 清除GM存储
-      if (!clearConfig()) {
-        showNotification('❌ 重置失败', 'error');
-        return;
-      }
-
-      // 立即应用重置后的样式
-      applyCustomStyles();
-
-      const modal = document.querySelector('.mjjbox-modal.show');
-      if (modal) {
-        modal.classList.remove('show');
-        setTimeout(() => modal.remove(), 300);
-      }
-
-      showNotification('✅ 设置已重置', 'success');
-
-      // 延迟刷新页面以完全重置
-      setTimeout(() => {
-        location.reload();
-      }, 1500);
-    }
-  };
-
-  /* ========== 模态框通用事件处理 ========== */
-  const setupModalEvents = (modal) => {
-    const closeBtn = modal.querySelector('.mjjbox-close-btn');
-    if (closeBtn) {
-      closeBtn.addEventListener('click', () => {
-        modal.classList.remove('show');
-        setTimeout(() => modal.remove(), 300);
+    // 清除GM存储
+    Object.keys(defaultConfig).forEach(category => {
+      Object.keys(defaultConfig[category]).forEach(key => {
+        GM_deleteValue(`mjjbox_${category.substring(0, 2)}_${key}`);
       });
-    }
-
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) {
-        modal.classList.remove('show');
-        setTimeout(() => modal.remove(), 300);
-      }
     });
 
-    const escHandler = (e) => {
-      if (e.key === 'Escape') {
-        modal.classList.remove('show');
-        setTimeout(() => modal.remove(), 300);
-        document.removeEventListener('keydown', escHandler);
+    // 重新应用样式
+    applyCustomStyles();
+
+    // 更新表单
+    const bgEnabled = modal.querySelector('#bg-enabled');
+    const bgUrl = modal.querySelector('#bg-url');
+    const fontEnabled = modal.querySelector('#font-enabled');
+    const fontFamily = modal.querySelector('#font-family');
+    const themeEnabled = modal.querySelector('#theme-enabled');
+
+    if (bgEnabled) bgEnabled.checked = false;
+    if (bgUrl) bgUrl.value = '';
+    if (fontEnabled) fontEnabled.checked = false;
+    if (fontFamily) fontFamily.value = 'inherit';
+    if (themeEnabled) themeEnabled.checked = false;
+
+    showNotification('✅ 设置已重置', 'success');
+  };
+
+  /* ========== 主入口 ========== */
+  const createFloatingButton = () => {
+    const button = document.createElement('div');
+    button.className = 'mjjbox-floating-btn';
+    button.innerHTML = '📊';
+    button.title = 'MJJBOX 等级助手';
+
+    GM_addStyle(`
+      .mjjbox-floating-btn {
+        position: fixed;
+        top: 20px;
+        right: 80px;
+        width: 50px;
+        height: 50px;
+        background: #007bff;
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 20px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 9999;
+        transition: all 0.3s ease;
+        user-select: none;
       }
-    };
-    document.addEventListener('keydown', escHandler);
+
+      .mjjbox-floating-btn:hover {
+        background: #0056b3;
+        transform: scale(1.1);
+        box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+      }
+
+      .mjjbox-floating-btn:active {
+        transform: scale(0.95);
+      }
+    `);
+
+    button.addEventListener('click', fetchUserLevel);
+    document.body.appendChild(button);
   };
 
   /* ========== 初始化 ========== */
   const init = () => {
-    console.log('🚀 MJJBOX 增强助手开始初始化...');
-
-    // 应用基础样式
-    GM_addStyle(baseStyles);
+    console.log('🚀 MJJBOX 增强助手初始化');
 
     // 加载配置
     loadConfig();
 
-    // 创建UI元素
-    createLevelBadge();
-    createSettingsButton();
-
     // 应用自定义样式
-    setTimeout(() => {
-      applyCustomStyles();
-      console.log('✅ 初始化完成');
-    }, 1000);
+    applyCustomStyles();
 
-    // 定期重新应用样式，确保样式持续生效
-    setInterval(() => {
-      if (currentConfig.background.enabled || currentConfig.font.enabled || currentConfig.theme.enabled) {
-        applyCustomStyles();
-      }
-    }, 5000);
+    // 创建浮动按钮
+    createFloatingButton();
+
+    console.log('✅ MJJBOX 增强助手初始化完成');
   };
 
-  // 启动
+  // 等待页面加载完成
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {
     init();
   }
+
 })();
