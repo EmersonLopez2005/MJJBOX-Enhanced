@@ -2,7 +2,7 @@
 // @name         MJJBOX 增强助手
 // @namespace    http://tampermonkey.net/
 // @version      3.8
-// @description  完整版本
+// @description  完整版本 + 隐藏条件提示
 // @author       Exia
 // @match        https://mjjbox.com/*
 // @grant        GM_xmlhttpRequest
@@ -637,10 +637,26 @@
     if (req.likesGiven) add('给出赞数', likesGiven, req.likesGiven);
     if (req.topicsRepliedTo) add('回复主题数', postCount, req.topicsRepliedTo);
 
-    // 🎯 隐藏条件：使用官方阅读天数
+    // 🎯 隐藏条件：过去100天内阅读天数
     if (req.postsReadUniqueDays) {
-      console.log('🎯 添加隐藏条件 - 官方阅读天数:', officialReadingDays);
-      add('过去100天内阅读天数', officialReadingDays, req.postsReadUniqueDays, true);
+      // 如果有官方数据，显示真实数据
+      if (officialReadingDays > 0) {
+        console.log('🎯 添加隐藏条件 - 官方阅读天数:', officialReadingDays);
+        add('过去100天内阅读天数', officialReadingDays, req.postsReadUniqueDays, true);
+      } else {
+        // 普通用户显示权限提示
+        console.log('🎯 添加隐藏条件 - 需要权限');
+        const item = {
+          name: '过去100天内阅读天数',
+          current: '需要权限',
+          required: req.postsReadUniqueDays,
+          percentage: 0,
+          completed: false,
+          isHidden: true,
+          needsPermission: true
+        };
+        progress.push(item);
+      }
     }
 
     const canLevelUp = progress.every(item => item.completed);
@@ -810,6 +826,11 @@
         border-left-color: #ff6b6b;
       }
 
+      .mjjbox-progress-item.needs-permission {
+        background: #f8d7da;
+        border-left-color: #dc3545;
+      }
+
       .mjjbox-progress-header {
         display: flex;
         justify-content: space-between;
@@ -848,6 +869,10 @@
         background: #ff6b6b;
       }
 
+      .mjjbox-progress-item.needs-permission .mjjbox-progress-fill {
+        background: #dc3545;
+      }
+
       .mjjbox-data-source {
         margin-top: 12px;
         padding: 8px;
@@ -866,6 +891,16 @@
         border-radius: 4px;
         font-size: 12px;
         color: #856404;
+      }
+
+      .mjjbox-permission-notice {
+        margin-top: 8px;
+        padding: 8px;
+        background: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 4px;
+        font-size: 12px;
+        color: #721c24;
       }
     `);
 
@@ -905,7 +940,14 @@
       html += '<div class="mjjbox-progress-list">';
 
       progress.forEach(item => {
-        const className = `mjjbox-progress-item ${item.completed ? 'complete' : 'incomplete'} ${item.isHidden ? 'hidden' : ''}`;
+        let className = `mjjbox-progress-item ${item.completed ? 'complete' : 'incomplete'}`;
+        if (item.isHidden) {
+          className += ' hidden';
+        }
+        if (item.needsPermission) {
+          className += ' needs-permission';
+        }
+
         html += `
           <div class="${className}">
             <div class="mjjbox-progress-header">
@@ -915,6 +957,12 @@
             <div class="mjjbox-progress-bar">
               <div class="mjjbox-progress-fill" style="width: ${item.percentage}%"></div>
             </div>
+            ${item.needsPermission ? `
+              <div class="mjjbox-permission-notice">
+                ⚠️ 需要50%，你还没达到<br>
+                💡 此数据需要管理员权限才能查看真实值
+              </div>
+            ` : ''}
           </div>
         `;
       });
@@ -923,7 +971,7 @@
     }
 
     // 添加数据来源说明
-    const hasOfficialData = progress.some(item => item.isHidden && item.current > 0);
+    const hasOfficialData = progress.some(item => item.isHidden && !item.needsPermission && item.current > 0);
     if (hasOfficialData) {
       html += `
         <div class="mjjbox-data-source">
@@ -938,7 +986,13 @@
       html += `
         <div class="mjjbox-hidden-conditions">
           🔒 <strong>隐藏条件说明:</strong><br>
-          ${hiddenItems.map(item => `• ${item.name}: ${item.current}/${item.required} (${item.percentage}%)`).join('<br>')}
+          ${hiddenItems.map(item => {
+            if (item.needsPermission) {
+              return `• ${item.name}: 需要权限查看真实数据`;
+            } else {
+              return `• ${item.name}: ${item.current}/${item.required} (${item.percentage}%)`;
+            }
+          }).join('<br>')}
         </div>
       `;
     }
