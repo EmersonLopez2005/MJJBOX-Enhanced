@@ -1,3 +1,5 @@
+<img src="https://img.zocc.de/i/2025/09/25/68d522876fe99.png" width="1000">
+
 # MJJBOX 增强助手 - 快速安装指南
 
 ## 🚀 一分钟快速安装
