@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         MJJBOX增强助手
 // @namespace    http://tampermonkey.net/
-// @version      2.0
-// @description  完整版本 + 科技风格主题 + 详细等级查看
+// @version      2.1
+// @description  完整版本 + 科技风格主题 + 详细等级查看 + 动态升级条件 + TL3快捷入口
 // @author       Exia
 // @match        https://mjjbox.com/*
 // @grant        GM_xmlhttpRequest
@@ -16,7 +16,11 @@
   'use strict';
   if (window !== window.top) return;
 
-  console.log('🚀 MJJBOX增强助手启动 v4.0');
+  console.log('🚀 MJJBOX增强助手启动 v2.1');
+
+  /* ========== 全局变量 ========== */
+  let currentUserId = null;
+  let currentUsername = null;
 
   /* ========== 等级名称（与官方同步） ========== */
   const levelNames = {
@@ -27,8 +31,8 @@
     4: '星曜会员'
   };
 
-  /* ========== 官方默认晋级条件（完全同步） ========== */
-  const levelRequirements = {
+  /* ========== 官方默认晋级条件（作为备份） ========== */
+  const defaultLevelRequirements = {
     1: {
       topics_entered: 5,
       posts_read: 30,
@@ -59,6 +63,120 @@
     }
   };
 
+  let levelRequirements = { ...defaultLevelRequirements };
+
+  /* ========== 动态获取升级条件 ========== */
+  const fetchLevelRequirements = async () => {
+    try {
+      console.log('🔄 尝试动态获取升级条件配置...');
+
+      // 先检查缓存（24小时有效）
+      const cachedConfig = GM_getValue('mjjbox_level_requirements');
+      const cachedTime = GM_getValue('mjjbox_level_requirements_time');
+
+      if (cachedConfig && cachedTime) {
+        const now = Date.now();
+        const cacheAge = now - cachedTime;
+        const oneDay = 24 * 60 * 60 * 1000;
+
+        if (cacheAge < oneDay) {
+          console.log('✅ 使用缓存的升级条件配置');
+          levelRequirements = JSON.parse(cachedConfig);
+          return levelRequirements;
+        }
+      }
+
+      // 尝试从站点设置获取
+      const siteSettings = await new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+          method: 'GET',
+          url: 'https://mjjbox.com/admin/site_settings.json?filter_names=tl1_requires_topics_entered,tl1_requires_read_posts,tl1_requires_time_spent_mins,tl2_requires_topics_entered,tl2_requires_read_posts,tl2_requires_time_spent_mins,tl2_requires_days_visited,tl2_requires_likes_received,tl2_requires_likes_given,tl2_requires_topic_reply_count,tl3_requires_days_visited,tl3_requires_topics_replied_to,tl3_requires_topics_viewed,tl3_requires_posts_read,tl3_requires_topics_viewed_all_time,tl3_requires_posts_read_all_time,tl3_requires_max_flagged_posts,tl3_requires_likes_given,tl3_requires_likes_received,tl3_requires_max_flagged_by_users_time_window',
+          timeout: 10000,
+          headers: {
+            Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          onload: (resp) => {
+            if (resp.status === 200) {
+              try {
+                const data = JSON.parse(resp.responseText);
+                resolve(data);
+              } catch (e) {
+                reject(e);
+              }
+            } else {
+              reject(new Error(`HTTP ${resp.status}`));
+            }
+          },
+          onerror: reject,
+          ontimeout: reject
+        });
+      });
+
+      if (siteSettings && siteSettings.site_settings) {
+        console.log('✅ 成功获取站点设置');
+
+        const settings = siteSettings.site_settings;
+        const newRequirements = { ...defaultLevelRequirements };
+
+        // 解析 TL1 要求
+        settings.forEach(setting => {
+          if (setting.setting === 'tl1_requires_topics_entered') {
+            newRequirements[1].topics_entered = setting.value;
+          } else if (setting.setting === 'tl1_requires_read_posts') {
+            newRequirements[1].posts_read = setting.value;
+          } else if (setting.setting === 'tl1_requires_time_spent_mins') {
+            newRequirements[1].time_read = setting.value * 60;
+          }
+          // TL2 要求
+          else if (setting.setting === 'tl2_requires_topics_entered') {
+            newRequirements[2].topics_entered = setting.value;
+          } else if (setting.setting === 'tl2_requires_read_posts') {
+            newRequirements[2].posts_read = setting.value;
+          } else if (setting.setting === 'tl2_requires_time_spent_mins') {
+            newRequirements[2].time_read = setting.value * 60;
+          } else if (setting.setting === 'tl2_requires_days_visited') {
+            newRequirements[2].days_visited = setting.value;
+          } else if (setting.setting === 'tl2_requires_likes_received') {
+            newRequirements[2].likes_received = setting.value;
+          } else if (setting.setting === 'tl2_requires_likes_given') {
+            newRequirements[2].likes_given = setting.value;
+          } else if (setting.setting === 'tl2_requires_topic_reply_count') {
+            newRequirements[2].posts_created = setting.value;
+          }
+          // TL3 要求
+          else if (setting.setting === 'tl3_requires_days_visited') {
+            newRequirements[3].days_visited_in_100 = setting.value;
+          } else if (setting.setting === 'tl3_requires_topics_viewed') {
+            newRequirements[3].topics_entered = setting.value;
+          } else if (setting.setting === 'tl3_requires_posts_read') {
+            newRequirements[3].posts_read = setting.value;
+          } else if (setting.setting === 'tl3_requires_topics_replied_to') {
+            newRequirements[3].posts_created_in_100 = setting.value;
+          } else if (setting.setting === 'tl3_requires_likes_received') {
+            newRequirements[3].likes_received = setting.value;
+          } else if (setting.setting === 'tl3_requires_likes_given') {
+            newRequirements[3].likes_given = setting.value;
+          }
+        });
+
+        levelRequirements = newRequirements;
+
+        // 缓存配置
+        GM_setValue('mjjbox_level_requirements', JSON.stringify(newRequirements));
+        GM_setValue('mjjbox_level_requirements_time', Date.now());
+
+        console.log('✅ 动态升级条件已更新并缓存:', levelRequirements);
+        return levelRequirements;
+      }
+
+    } catch (error) {
+      console.log('⚠️ 动态获取升级条件失败，使用默认配置:', error.message);
+    }
+
+    return levelRequirements;
+  };
+
   /* ========== 配置管理系统 ========== */
   const defaultConfig = {
     background: {
@@ -80,7 +198,7 @@
     },
     theme: {
       enabled: false,
-      style: 'tech', // 新增：主题风格选择
+      style: 'tech',
       primaryColor: '#00d4ff',
       secondaryColor: '#1a1a2e',
       accentColor: '#ff6b6b',
@@ -185,8 +303,6 @@
         font-display: swap;
       }
     `;
-
-    // 背景样式将在主题样式之后应用
 
     // 字体样式
     if (currentConfig.font.enabled) {
@@ -588,6 +704,10 @@
         throw new Error('无法获取用户ID');
       }
 
+      // 保存用户信息到全局变量
+      currentUserId = userId;
+      currentUsername = username;
+
       console.log('🔍 用户ID:', userId);
 
       const adminData = await new Promise((resolve, reject) => {
@@ -721,6 +841,12 @@
 
       const user = publicData.user || summaryData.users?.[0];
       const userSummary = summaryData.user_summary;
+
+      // 保存用户信息到全局变量
+      if (user?.id) {
+        currentUserId = user.id;
+        currentUsername = username;
+      }
 
       console.log('📊 原始用户数据:', { user, userSummary });
 
@@ -949,6 +1075,17 @@
     }, 3000);
   };
 
+  const openTL3RequirementsPage = () => {
+    if (!currentUserId || !currentUsername) {
+      showNotification('⚠️ 请先加载用户数据', 'warning');
+      return;
+    }
+
+    const url = `https://mjjbox.com/admin/users/${currentUserId}/${currentUsername}/tl3_requirements`;
+    console.log('🔗 打开TL3要求页面:', url);
+    window.open(url, '_blank');
+  };
+
   const createLevelPanel = () => {
     if (panel) return panel;
 
@@ -958,6 +1095,7 @@
       <div class="mjjbox-panel-header">
         <span class="mjjbox-panel-title">🚀 等级进度</span>
         <div class="mjjbox-panel-controls">
+          <button class="mjjbox-btn mjjbox-btn-tl3" title="查看TL3详细要求">📊</button>
           <button class="mjjbox-btn mjjbox-btn-settings" title="个性化设置">⚙️</button>
           <button class="mjjbox-btn mjjbox-btn-refresh" title="刷新数据">🔄</button>
           <button class="mjjbox-btn mjjbox-btn-close" title="关闭面板">✕</button>
@@ -1025,6 +1163,16 @@
         border-color: #00d4ff;
         transform: translateY(-1px);
         box-shadow: 0 4px 12px rgba(0, 212, 255, 0.3);
+      }
+
+      .mjjbox-btn-tl3 {
+        background: linear-gradient(45deg, rgba(0, 212, 255, 0.3), rgba(0, 153, 204, 0.3)) !important;
+        border: 1px solid rgba(0, 212, 255, 0.5) !important;
+      }
+
+      .mjjbox-btn-tl3:hover {
+        background: linear-gradient(45deg, rgba(0, 212, 255, 0.5), rgba(0, 153, 204, 0.5)) !important;
+        box-shadow: 0 4px 12px rgba(0, 212, 255, 0.4) !important;
       }
 
       .mjjbox-panel-content {
@@ -1221,6 +1369,10 @@
       showSettingsModal();
     });
 
+    panel.querySelector('.mjjbox-btn-tl3').addEventListener('click', () => {
+      openTL3RequirementsPage();
+    });
+
     document.body.appendChild(panel);
     return panel;
   };
@@ -1287,7 +1439,7 @@
     if (hasOfficialData) {
       html += `
         <div class="mjjbox-data-source">
-          ✅ 使用官方数据源
+          ✅ 使用官方数据源（动态获取）
         </div>
       `;
     }
@@ -1319,6 +1471,9 @@
     isLoading = true;
 
     try {
+      // 先尝试获取动态升级条件
+      await fetchLevelRequirements();
+
       const username = getCurrentUsername();
       if (!username) {
         throw new Error('无法获取当前用户名');
